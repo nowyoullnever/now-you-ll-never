@@ -1,6 +1,7 @@
 #include "AppShell.h"
 
 #include "../app/fonts.h"
+#include "../audio/waveform/WaveformUiState.h"
 #include "text/Strings.h"
 
 #include <cmath>
@@ -147,20 +148,22 @@ void AppShell::Draw(IGraphics& graphics)
     mOpenLocalAudioButton.SetEnabled(true);
     mOpenLocalAudioButton.Draw(graphics, mRECT, tokens, mLocalAudioFocus.ButtonFocused());
     std::string status = "NO LOCAL AUDIO SELECTED.";
+    const auto waveformState = mWaveforms.Status();
+    const auto uiState = audio::waveform::SelectUiState(mLocalAudioDocument.State(), waveformState);
     if (mLocalAudioDocument.State() == audio::AudioDocumentState::Ready)
     {
       const auto& info = mLocalAudioDocument.Info();
       const auto filename = info.path.filename().u8string();
       status = "FILE      " + std::string(filename.begin(), filename.end()) + "\nCONTAINER " + ContainerName(info.container) + "\nCODEC     " + CodecName(info.codec) + "\nSOURCE    " + SourceName(info.sourceFormat) + "\nCHANNELS  " + std::to_string(info.channels) + (info.channels == 2 ? " (Stereo)" : "") + "\nRATE      " + std::to_string(info.sampleRate) + " Hz\nFRAMES    " + std::to_string(info.frames) + "\nDURATION  " + Duration(info.durationSeconds);
     }
-    else if (mLocalAudioDocument.State() == audio::AudioDocumentState::Loading)
+    if (uiState == audio::waveform::UiState::AudioLoading)
       status = "LOADING LOCAL AUDIO…";
-    else if (mLocalAudioDocument.State() == audio::AudioDocumentState::Failed)
+    else if (uiState == audio::waveform::UiState::AudioFailed)
       status = "LOAD FAILED\n" + mLocalAudioDocument.Diagnostic();
-    else if (mWaveforms.Status() == audio::waveform::BuildState::Building)
-      status = "BUILDING WAVEFORM…";
-    else if (mWaveforms.Status() == audio::waveform::BuildState::Failed)
-      status = "WAVEFORM FAILED\n" + mWaveforms.Diagnostic();
+    else if (uiState == audio::waveform::UiState::WaveformBuilding)
+      status += "\nBUILDING WAVEFORM…";
+    else if (uiState == audio::waveform::UiState::WaveformFailed)
+      status += "\nWAVEFORM UNAVAILABLE\n" + mWaveforms.Diagnostic();
     graphics.DrawText({12.f, color(tokens.textSecondary), fonts::kTechnical}, status.c_str(), local({content.x, content.y + 128.f, content.width, 154.f}));
     if (const auto cache = mWaveforms.Cache()) { const Rect canvas=WaveformBounds(layout); graphics.FillRect(color(tokens.waveBackground), local(canvas)); const auto view=mWaveformViewport.Empty()?audio::waveform::FullViewport(cache->frames):mWaveformViewport; const auto plan=audio::waveform::BuildRenderPlan(*cache,view,static_cast<uint32_t>(canvas.width)); for(uint32_t ch=0;ch<cache->channels;++ch){const float mid=canvas.y+canvas.height*(ch+.5f)/cache->channels;graphics.DrawLine(color(tokens.separator),mRECT.L+canvas.x,mRECT.T+mid,mRECT.L+canvas.x+canvas.width,mRECT.T+mid,nullptr,1.f);graphics.DrawText({10.f,color(tokens.technicalOnAudio),fonts::kTechnical},cache->channels==1?"MONO":(ch==0?"L":"R"),local({canvas.x+3.f,mid-9.f,25.f,16.f}));} for(const auto&p:plan.columns){const float mid=canvas.y+canvas.height*(p.channel+.5f)/cache->channels,half=canvas.height/cache->channels/2.f;graphics.DrawLine(color(tokens.wavePrimary),mRECT.L+canvas.x+static_cast<float>(p.x),mRECT.T+mid-p.maximum*half,mRECT.L+canvas.x+static_cast<float>(p.x),mRECT.T+mid-p.minimum*half,nullptr,1.f);} for(const auto&tick:audio::waveform::BuildTimeRuler(view,mLocalAudioDocument.Info().sampleRate,static_cast<uint32_t>(canvas.width))){graphics.DrawLine(color(tokens.separator),mRECT.L+canvas.x+static_cast<float>(tick.x),mRECT.T+canvas.y+canvas.height-8.f,mRECT.L+canvas.x+static_cast<float>(tick.x),mRECT.T+canvas.y+canvas.height,nullptr,1.f);graphics.DrawText({9.f,color(tokens.technicalOnAudio),fonts::kTechnical},tick.label.c_str(),local({canvas.x+static_cast<float>(tick.x),canvas.y+canvas.height-20.f,78.f,12.f}));} }
     graphics.DrawText({11.f, color(tokens.textSecondary), fonts::kTechnical}, "WAV/WAVE local waveform only. Wheel: zoom, Shift+wheel: scroll, F: full view. No playback, selection, trim or export.", local({content.x, content.y + 286.f, content.width, 24.f}));
@@ -264,7 +267,7 @@ void AppShell::OnMouseWheel(float x, float y, const IMouseMod& mod, float distan
   if (mState.Selected() == TabId::Inbox && WaveformBounds(Layout()).Contains(x - mRECT.L, y - mRECT.T) && !mWaveformViewport.Empty())
   {
     if (mod.S) mWaveformViewport = audio::waveform::Scroll(mWaveformViewport, static_cast<int64_t>(-distance * static_cast<float>(mWaveformViewport.end - mWaveformViewport.start) / 8.f));
-    else mWaveformViewport = audio::waveform::Zoom(mWaveformViewport, distance > 0.f ? 1.25 : .8, (x - mRECT.L - WaveformBounds(Layout()).x) / WaveformBounds(Layout()).width);
+    else { const auto cache=mWaveforms.Cache(); const uint64_t minimum=cache?audio::waveform::MinimumViewportSpan(*cache):mWaveformViewport.totalFrames; mWaveformViewport = audio::waveform::Zoom(mWaveformViewport, distance > 0.f ? 1.25 : .8, (x - mRECT.L - WaveformBounds(Layout()).x) / WaveformBounds(Layout()).width, minimum); }
     Redraw(); return;
   }
   if (mState.Selected() != TabId::Settings || mDemoModal.Open()) return;

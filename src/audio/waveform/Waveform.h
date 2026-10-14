@@ -11,6 +11,7 @@ struct PeakLevel { uint64_t framesPerBucket{}; std::vector<std::vector<Peak>> ch
 struct PeakCache { uint32_t channels{}; uint64_t frames{}; std::vector<PeakLevel> levels; };
 std::shared_ptr<const PeakCache> BuildPeakCache(const DecodedPcm& pcm, uint64_t baseFrames = 64, std::string* error = nullptr);
 std::size_t ChooseLevel(const PeakCache& cache, double framesPerPixel);
+uint64_t MinimumViewportSpan(const PeakCache& cache);
 
 struct Viewport { uint64_t totalFrames{}, start{}, end{}; bool Empty() const { return totalFrames == 0; } };
 Viewport FullViewport(uint64_t frames);
