@@ -1,10 +1,10 @@
 # tokkebi
 ## 통합 오디오 수집·샘플 라이브러리·DAW 플러그인: MASTER BLUEPRINT
 
-> **문서 상태:** `IMPLEMENTATION AUTHORIZED: P02.8.4 — LOCAL AUDIO FOCUS OWNERSHIP FINAL CORRECTION` · 명세 버전 `0.2.8.4` · 작성 기준일 `2026-10-09`
+> **문서 상태:** `IMPLEMENTATION AUTHORIZED: P02.9.2 — FROZEN FINAL CORRECTION` · 명세 버전 `0.2.9.2` · 작성 기준일 `2026-10-14`
 > **대상 저장소:** https://github.com/nowyoullnever/tokkebi · 기본 브랜치 `main`
 > **제품명:** `tokkebi`는 확정된 공식 제품명이다. 최종 앱 라이선스는 별도 결정이 필요하다.
-> **현재 프로젝트 단계:** P02.8.4의 local-audio 단일 포커스 소유권 보정만 승인됨. waveform, preview, IN/OUT, export 및 P02.9 이후는 승인되지 않았다.
+> **현재 프로젝트 단계:** P02.9.2 waveform foundation의 동결 최종 보정만 승인됨. playback, playhead, selection, IN/OUT, export 및 P02.10 이후는 승인되지 않았다.
 > **개발 기본 원칙:** 유료 API 의존성 없음 / Windows + macOS / Standalone + VST3 + AUv2 / 로컬 우선 / 불필요한 DRM 우회 없음 / 사용자의 샘플 데이터 보존.
 
 ---
@@ -1073,6 +1073,8 @@ Priority: Must / Should / Future / Remove
 
 | Version | Date | Status | Changes |
 |---|---|---|---|
+| `0.2.9.2` | 2026-10-14 | **P02.9.2 frozen final correction authorized** | waveform combined UI state, finest-peak zoom bound, overflow-safe time decomposition, deterministic coordinator and full peak/viewport/render/ruler regression coverage만 보정한다. P02.10 및 playback/selection/export는 승인하지 않았다. |
+| `0.2.9.1` | 2026-10-09 | **P02.9.1 correction authorized** | P02.9 waveform foundation의 shared PCM snapshot, 최신 generation worker, 안전한 viewport/ruler 산술, 실제 INBOX peak rendering 및 Debug/Release waveform test CI 대상을 보정한다. playback, selection, IN/OUT, export와 P02.10은 승인하지 않았다. |
 | `0.2.8.4` | 2026-10-09 | **P02.8.4 correction authorized** | local-audio button의 포커스가 INBOX 밖에 남지 않도록 shell navigation 소유권과 arrow-key 정책만 보정한다. P02.9 기능은 승인하지 않았다. |
 | `0.2.8.3` | 2026-10-09 | **P02.8.3 correction authorized** | native file-dialog callback의 AppShell 수명 분리, INBOX local-audio focus 순서, Failed AudioDocument의 empty-PCM 불변식과 결정론적 latest-request 검증만 보정한다. P02.9 기능은 승인하지 않았다. |
 | `0.2.8.2` | 2026-10-09 | **P02.8.2 correction authorized** | display tick 기반 async completion, bounded single worker, worker exception/resource safety 및 일관된 local-open input 상태만 보정한다. P02.9 기능은 승인하지 않았다. |
@@ -1087,4 +1089,4 @@ Priority: Must / Should / Future / Remove
 | `0.1.1` | 2026-10-06 | **P00.2 implementation authorized; specification under active revision** | 소유자의 명시 승인에 따라 P00.2 native Standalone bootstrap만 시작 가능. 기존 요구사항 ID와 `OPEN-*` 결정은 유지하며 P00.3 이후는 승인되지 않음. |
 | `0.1.0` | 2026-10-06 | **DRAFT, awaiting owner review** | 최초 통합 블루프린트 작성. 화면/디자인·폰트·전 소스·오디오/Library/History·DAW·Helper·설치·라이선스·QA·작업 절차 정리. 코드 개발 미착수. |
 
-> **STOP RULE:** 소유자는 P02.8까지만 명시 승인했다. Codex는 P02.9 이후 기능, waveform, preview, IN/OUT, export, 인스톨러 또는 미검증 폰트 업로드를 시작하지 않는다. 본 문서는 계속 검토·수정 중인 명세다.
+> **STOP RULE:** 소유자는 P02.9.2 frozen waveform correction까지만 명시 승인했다. Codex는 playback, playhead, selection, IN/OUT, export, P02.10 이후 기능, 인스톨러 또는 미검증 폰트 업로드를 시작하지 않는다. 본 문서는 계속 검토·수정 중인 명세다.

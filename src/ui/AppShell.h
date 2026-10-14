@@ -9,6 +9,7 @@
 #include "LocalAudioDialogMailbox.h"
 #include "../audio/AudioDocument.h"
 #include "../audio/AudioLoadCoordinator.h"
+#include "../audio/waveform/WaveformCoordinator.h"
 
 namespace tokkebi::ui
 {
@@ -40,6 +41,7 @@ private:
   void ShowDemoNotification();
   void PromptForLocalAudio();
   Rect LocalAudioButtonBounds(const ShellLayout& layout) const;
+  Rect WaveformBounds(const ShellLayout& layout) const;
   void Redraw();
 
   NavigationState mState;
@@ -57,6 +59,9 @@ private:
   bool mModalConfirmFocused = false;
   audio::AudioDocument mLocalAudioDocument;
   audio::AudioLoadCoordinator mLocalAudioLoads;
+  audio::waveform::Coordinator mWaveforms;
+  uint64_t mWaveformGeneration = 0;
+  audio::waveform::Viewport mWaveformViewport;
   std::shared_ptr<LocalAudioDialogMailbox> mLocalAudioDialogMailbox = std::make_shared<LocalAudioDialogMailbox>();
   LocalAudioFocusRouter mLocalAudioFocus;
 };

@@ -25,10 +25,10 @@ jobs:
         run: cmake -S . -B build/windows-x64 -G "Visual Studio 17 2022" -A x64 -DIPLUG_DEPLOY_PLUGINS=OFF
       - name: Build Debug Standalone and VST3
         shell: pwsh
-        run: cmake --build build/windows-x64 --config Debug --target tokkebi-app tokkebi-vst3 tokkebi-audio-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
+        run: cmake --build build/windows-x64 --config Debug --target tokkebi-app tokkebi-vst3 tokkebi-audio-tests tokkebi-waveform-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
       - name: Build Release Standalone and VST3
         shell: pwsh
-        run: cmake --build build/windows-x64 --config Release --target tokkebi-app tokkebi-vst3 tokkebi-audio-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
+        run: cmake --build build/windows-x64 --config Release --target tokkebi-app tokkebi-vst3 tokkebi-audio-tests tokkebi-waveform-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
       - name: Run identity and version tests
         shell: pwsh
         run: |
@@ -65,13 +65,13 @@ jobs:
       - name: Configure Debug
         run: cmake -S . -B build/macos-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DIPLUG_DEPLOY_PLUGINS=OFF
       - name: Build Debug targets
-        run: cmake --build build/macos-debug --target tokkebi-app tokkebi-vst3 tokkebi-au tokkebi-audio-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
+        run: cmake --build build/macos-debug --target tokkebi-app tokkebi-vst3 tokkebi-au tokkebi-audio-tests tokkebi-waveform-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
       - name: Test Debug
         run: ctest --test-dir build/macos-debug --output-on-failure
       - name: Configure Release
         run: cmake -S . -B build/macos-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DIPLUG_DEPLOY_PLUGINS=OFF
       - name: Build Release targets
-        run: cmake --build build/macos-release --target tokkebi-app tokkebi-vst3 tokkebi-au tokkebi-audio-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
+        run: cmake --build build/macos-release --target tokkebi-app tokkebi-vst3 tokkebi-au tokkebi-audio-tests tokkebi-waveform-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
       - name: Test Release
         run: ctest --test-dir build/macos-release --output-on-failure
       - name: Verify bundle outputs

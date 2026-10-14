@@ -1,4 +1,4 @@
-# Build (P02.8.1)
+# Build (P02.9.1)
 
 ## Prerequisites
 
@@ -21,8 +21,8 @@ The setup script places the exact SDK revision at `third_party/iPlug2/Dependenci
 
 ```powershell
 cmake -S . -B build/windows-x64 -G "Visual Studio 17 2022" -A x64 -DIPLUG_DEPLOY_PLUGINS=OFF
-cmake --build build/windows-x64 --config Debug --target tokkebi-app tokkebi-vst3 tokkebi-audio-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
-cmake --build build/windows-x64 --config Release --target tokkebi-app tokkebi-vst3 tokkebi-audio-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
+cmake --build build/windows-x64 --config Debug --target tokkebi-app tokkebi-vst3 tokkebi-audio-tests tokkebi-waveform-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
+cmake --build build/windows-x64 --config Release --target tokkebi-app tokkebi-vst3 tokkebi-audio-tests tokkebi-waveform-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
 ctest --test-dir build/windows-x64 -C Debug --output-on-failure
 ctest --test-dir build/windows-x64 -C Release --output-on-failure
 cmake --build build/windows-x64 --config Release --target tokkebi-verify-vst3-bundle
@@ -49,10 +49,10 @@ Run Debug and Release in distinct build trees to keep bundle outputs separate:
 git submodule update --init --recursive
 pwsh -File scripts/setup-vst3-sdk.ps1
 cmake -S . -B build/macos-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DIPLUG_DEPLOY_PLUGINS=OFF
-cmake --build build/macos-debug --target tokkebi-app tokkebi-vst3 tokkebi-au tokkebi-audio-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
+cmake --build build/macos-debug --target tokkebi-app tokkebi-vst3 tokkebi-au tokkebi-audio-tests tokkebi-waveform-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
 ctest --test-dir build/macos-debug --output-on-failure
 cmake -S . -B build/macos-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DIPLUG_DEPLOY_PLUGINS=OFF
-cmake --build build/macos-release --target tokkebi-app tokkebi-vst3 tokkebi-au tokkebi-audio-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
+cmake --build build/macos-release --target tokkebi-app tokkebi-vst3 tokkebi-au tokkebi-audio-tests tokkebi-waveform-tests tokkebi-theme-tests tokkebi-ui-shell-tests tokkebi-ui-component-tests
 ctest --test-dir build/macos-release --output-on-failure
 ```
 

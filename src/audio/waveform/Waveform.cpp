@@ -1,0 +1,27 @@
+#include "Waveform.h"
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
+#include <limits>
+#include <sstream>
+namespace tokkebi::audio::waveform {
+namespace { bool Valid(const DecodedPcm& p) { return p.channels && p.frames <= std::numeric_limits<size_t>::max()/p.channels && p.interleaved.size()==static_cast<size_t>(p.frames*p.channels); } uint64_t Add(uint64_t a,uint64_t b){return b>std::numeric_limits<uint64_t>::max()-a?std::numeric_limits<uint64_t>::max():a+b;} }
+std::shared_ptr<const PeakCache> BuildPeakCache(const DecodedPcm& p,uint64_t base,std::string* error) {
+  if(!base||!Valid(p)){if(error)*error="Invalid PCM dimensions.";return{};} auto out=std::make_shared<PeakCache>();out->channels=p.channels;out->frames=p.frames;if(!p.frames)return out;
+  PeakLevel level;level.framesPerBucket=base;level.channels.resize(p.channels);
+  for(uint32_t c=0;c<p.channels;++c) for(uint64_t first=0;first<p.frames;){uint64_t end=std::min(p.frames,Add(first,base));Peak peak{std::numeric_limits<float>::infinity(),-std::numeric_limits<float>::infinity(),first,end};for(uint64_t f=first;f<end;++f){float v=p.At(f,c);if(!std::isfinite(v)){if(error)*error="Non-finite PCM.";return{};}peak.minimum=std::min(peak.minimum,v);peak.maximum=std::max(peak.maximum,v);}level.channels[c].push_back(peak);first=end;}
+  out->levels.push_back(std::move(level));
+  while(out->levels.back().channels[0].size()>1&&out->levels.size()<24){const auto& prior=out->levels.back();PeakLevel next;next.framesPerBucket=prior.framesPerBucket>std::numeric_limits<uint64_t>::max()/2?std::numeric_limits<uint64_t>::max():prior.framesPerBucket*2;next.channels.resize(p.channels);for(uint32_t c=0;c<p.channels;++c)for(size_t i=0;i<prior.channels[c].size();i+=2){const auto&a=prior.channels[c][i];const auto&b=prior.channels[c][std::min(i+1,prior.channels[c].size()-1)];next.channels[c].push_back({std::min(a.minimum,b.minimum),std::max(a.maximum,b.maximum),a.firstFrame,b.endFrame});}out->levels.push_back(std::move(next));}
+  return out;
+}
+std::size_t ChooseLevel(const PeakCache& c,double d){size_t n=0;while(n+1<c.levels.size()&&c.levels[n+1].framesPerBucket<=d)++n;return n;}
+uint64_t MinimumViewportSpan(const PeakCache& c){return c.frames==0?0:std::min(c.frames,c.levels.empty()?c.frames:c.levels.front().framesPerBucket);}
+Viewport FullViewport(uint64_t f){return{f,0,f};}
+Viewport Zoom(Viewport v,double factor,double pointer,uint64_t minimum){if(v.Empty()||v.end<v.start||!std::isfinite(factor)||factor<=0)return v;uint64_t old=v.end-v.start; uint64_t proposed=static_cast<uint64_t>(std::max(1.0L,std::round(static_cast<long double>(old)/factor))); uint64_t span=std::max<uint64_t>(std::min(minimum,v.totalFrames),std::min(v.totalFrames,proposed));pointer=std::clamp(pointer,0.,1.);uint64_t anchor=v.start+static_cast<uint64_t>(std::round(static_cast<long double>(old)*pointer)),before=std::min(span,static_cast<uint64_t>(std::round(static_cast<long double>(span)*pointer))),maxStart=v.totalFrames-span,start=anchor>before?std::min(anchor-before,maxStart):0;return{v.totalFrames,start,start+span};}
+Viewport Scroll(Viewport v,int64_t d){if(v.Empty()||v.end<v.start)return v;uint64_t span=v.end-v.start,maxStart=v.totalFrames-span,start=v.start;if(d>=0)start=std::min(maxStart,Add(start,static_cast<uint64_t>(d)));else{uint64_t amount=static_cast<uint64_t>(-(d+1))+1;start=amount>start?0:start-amount;}return{v.totalFrames,start,start+span};}
+double FrameToX(const Viewport& v,uint64_t f,double width){if(v.Empty()||v.end<=v.start||width<=0)return 0;long double offset=f<=v.start?0:std::min(f-v.start,v.end-v.start);return static_cast<double>(offset/static_cast<long double>(v.end-v.start)*width);}
+uint64_t XToFrame(const Viewport& v,double x,double width){if(v.Empty()||v.end<=v.start||width<=0||!std::isfinite(x))return v.start;return v.start+static_cast<uint64_t>(std::round(std::clamp(x/width,0.,1.)*static_cast<long double>(v.end-v.start)));}
+RenderPlan BuildRenderPlan(const PeakCache& c,const Viewport& v,uint32_t width){RenderPlan r;if(!width||v.Empty()||v.end<=v.start||c.levels.empty())return r;const auto& l=c.levels[ChooseLevel(c,static_cast<double>(v.end-v.start)/width)];for(uint32_t ch=0;ch<c.channels;++ch){const auto& buckets=l.channels[ch];auto it=std::lower_bound(buckets.begin(),buckets.end(),v.start,[](const Peak&p,uint64_t f){return p.endFrame<=f;});for(;it!=buckets.end()&&it->firstFrame<v.end;++it){++r.inspectedBuckets;r.columns.push_back({FrameToX(v,it->firstFrame,width),std::clamp(it->minimum,-1.f,1.f),std::clamp(it->maximum,-1.f,1.f),ch,it->firstFrame,it->endFrame});}}return r;}
+std::string FormatTime(uint64_t frames,uint32_t rate){const uint64_t seconds=rate?frames/rate:0,remaining=rate?frames%rate:0,h=seconds/3600,m=(seconds/60)%60,s=seconds%60,ms=rate?(remaining*1000)/rate:0;std::ostringstream o;o<<std::setfill('0')<<std::setw(2)<<h<<':'<<std::setw(2)<<m<<':'<<std::setw(2)<<s<<'.'<<std::setw(3)<<ms;return o.str();}
+std::vector<RulerTick> BuildTimeRuler(const Viewport& v,uint32_t rate,uint32_t width,uint32_t spacing){std::vector<RulerTick> r;if(v.Empty()||!rate||!width||!spacing)return r;uint64_t desired=std::max<uint64_t>(1,(v.end-v.start)/std::max<uint32_t>(1,width/spacing)),step=1;while(step<desired&&step<=std::numeric_limits<uint64_t>::max()/10)step*=10;for(uint64_t f=(v.start/step)*step;f<v.end;){if(f>=v.start)r.push_back({f,FrameToX(v,f,width),FormatTime(f,rate)});if(f>std::numeric_limits<uint64_t>::max()-step)break;f+=step;}return r;}
+}
