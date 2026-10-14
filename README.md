@@ -1,6 +1,6 @@
 # t o k k e b i
 
-**Status: Roadmap recovery pending external review.**
+**Status: P02 Audio Editing — canonical 34-task roadmap restored.**
 
 `tokkebi` is a cross-platform audio collection and sample-library product in development.
 
