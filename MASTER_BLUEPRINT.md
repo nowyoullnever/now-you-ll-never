@@ -1,10 +1,10 @@
 # tokkebi
 ## 통합 오디오 수집·샘플 라이브러리·DAW 플러그인: MASTER BLUEPRINT
 
-> **문서 상태:** `IMPLEMENTATION AUTHORIZED: P02.10 — IN/OUT SELECTION & EDITOR INTERACTION` · 명세 버전 `0.2.10` · 작성 기준일 `2026-10-14`
+> **문서 상태:** `EARLY / PARKED / NOT AUTHORIZED FOR MERGE: Development Task 10 selection foundation` · branch-only note · 작성 기준일 `2026-10-14`
 > **대상 저장소:** https://github.com/nowyoullnever/tokkebi · 기본 브랜치 `main`
 > **제품명:** `tokkebi`는 확정된 공식 제품명이다. 최종 앱 라이선스는 별도 결정이 필요하다.
-> **현재 프로젝트 단계:** P02.10 selection/editor interaction만 승인됨. playback, playhead, preview, export 및 P02.11 이후는 승인되지 않았다.
+> **현재 프로젝트 단계:** 이 브랜치는 Development Task 10의 조기 selection foundation만 보관한다. Development Task 09가 다음 기능 작업이며, 이 브랜치는 그 작업의 완료와 외부 검토 전 병합 권한이 없다.
 > **개발 기본 원칙:** 유료 API 의존성 없음 / Windows + macOS / Standalone + VST3 + AUv2 / 로컬 우선 / 불필요한 DRM 우회 없음 / 사용자의 샘플 데이터 보존.
 
 ---
@@ -1073,7 +1073,7 @@ Priority: Must / Should / Future / Remove
 
 | Version | Date | Status | Changes |
 |---|---|---|---|
-| `0.2.10` | 2026-10-14 | **P02.10 authorized** | PR #8은 `8b89d509454e82ad9b4e9c552852bd3f108c81ec`로 병합되었다. 프레임 기반 IN/OUT selection, time parsing, transient bounded undo/redo 및 waveform selection interaction만 구현한다. `OPEN-AUDIO-01`과 playback/export는 유지한다. |
+| `0.2.10-parked` | 2026-10-14 | **EARLY / PARKED / NOT AUTHORIZED FOR MERGE** | 이 브랜치는 Development Task 10의 프레임 기반 selection foundation을 보관한다. Task 09 playback 완료 및 외부 검토 전에는 병합하거나 다음 공식 작업으로 취급하지 않는다. `OPEN-AUDIO-01`, playback 및 export는 유지한다. |
 | `0.2.9.2` | 2026-10-14 | **P02.9.2 frozen final correction authorized** | waveform combined UI state, finest-peak zoom bound, overflow-safe time decomposition, deterministic coordinator and full peak/viewport/render/ruler regression coverage만 보정한다. P02.10 및 playback/selection/export는 승인하지 않았다. |
 | `0.2.9.1` | 2026-10-09 | **P02.9.1 correction authorized** | P02.9 waveform foundation의 shared PCM snapshot, 최신 generation worker, 안전한 viewport/ruler 산술, 실제 INBOX peak rendering 및 Debug/Release waveform test CI 대상을 보정한다. playback, selection, IN/OUT, export와 P02.10은 승인하지 않았다. |
 | `0.2.8.4` | 2026-10-09 | **P02.8.4 correction authorized** | local-audio button의 포커스가 INBOX 밖에 남지 않도록 shell navigation 소유권과 arrow-key 정책만 보정한다. P02.9 기능은 승인하지 않았다. |
@@ -1090,4 +1090,4 @@ Priority: Must / Should / Future / Remove
 | `0.1.1` | 2026-10-06 | **P00.2 implementation authorized; specification under active revision** | 소유자의 명시 승인에 따라 P00.2 native Standalone bootstrap만 시작 가능. 기존 요구사항 ID와 `OPEN-*` 결정은 유지하며 P00.3 이후는 승인되지 않음. |
 | `0.1.0` | 2026-10-06 | **DRAFT, awaiting owner review** | 최초 통합 블루프린트 작성. 화면/디자인·폰트·전 소스·오디오/Library/History·DAW·Helper·설치·라이선스·QA·작업 절차 정리. 코드 개발 미착수. |
 
-> **STOP RULE:** 소유자는 P02.10 selection/editor까지만 명시 승인했다. Codex는 playback, playhead, preview, export, P02.11 이후 기능, 인스톨러 또는 미검증 폰트 업로드를 시작하지 않는다. 본 문서는 계속 검토·수정 중인 명세다.
+> **STOP RULE:** 이 브랜치는 조기 Development Task 10 selection foundation으로 parked 상태다. Task 09 playback 완료 및 외부 검토 전에는 병합하거나 selection/editor 기능을 계속 구현하지 않는다. Codex는 playback, playhead, preview, export, Task 11 이후 기능, 인스톨러 또는 미검증 폰트 업로드를 시작하지 않는다. 본 문서는 계속 검토·수정 중인 명세다.
