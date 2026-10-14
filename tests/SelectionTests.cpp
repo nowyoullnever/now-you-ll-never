@@ -1,0 +1,5 @@
+#include "audio/editor/SelectionState.h"
+#include <iostream>
+using namespace tokkebi::audio::editor;int fail=0;
+#define C(x) do{if(!(x)){++fail;std::cerr<<#x<<'\n';}}while(0)
+int main(){SelectionState s;s.SetSource(480000,48000);C(!s.Current());C(s.SelectAll()&&s.Current()->outFrame==480000);s.Clear();C(!s.Current());C(s.Select(100,20)&&s.Current()->inFrame==20&&s.Current()->outFrame==100);C(!s.Select(5,5)&&!s.Select(500001,500002));C(s.MoveIn(-10)&&s.MoveOut(10));auto a=*s.Current();C(s.Undo()&&s.Redo()&&*s.Current()==a);C(ParseTime("25:00:00.000")->milliseconds==90000000);for(auto v:{"00:60:00.000","00:00:60.000","00:00:00.1000","-00:00:01.000","nan","inf","00:00:00.000x"})C(!ParseTime(v));C(FormatTime(48000*3600ULL*25,48000)=="25:00:00.000");C(MillisecondsToFrame(1001,48000)==48048);C(Intersect({10,30},20,40).start==20&&Intersect({10,30},20,40).end==30);s.SetSource(1,48000);C(s.SelectAll()&&s.Current()->outFrame==1);s.SetSource(0,48000);C(!s.SelectAll()&&!s.Current());s.SetSource(UINT64_MAX,1);C(s.Select(1,UINT64_MAX)&&s.Current()->outFrame==UINT64_MAX);return fail;}

@@ -19,5 +19,6 @@ Repository: <https://github.com/nowyoullnever/tokkebi>
 - [UI components](docs/UI_COMPONENTS.md)
 - [Local audio decoder](docs/AUDIO_DECODER.md)
 - [Waveform foundation](docs/WAVEFORM.md)
+- [Selection editor](docs/SELECTION_EDITOR.md)
 
 The product name is final for this repository. The application release remains `0.1.0`; P00 task numbers are implementation-stage labels, not release versions. `OPEN-FONT-04` remains unresolved.

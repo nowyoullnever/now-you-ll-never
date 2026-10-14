@@ -10,6 +10,7 @@
 #include "../audio/AudioDocument.h"
 #include "../audio/AudioLoadCoordinator.h"
 #include "../audio/waveform/WaveformCoordinator.h"
+#include "../audio/editor/SelectionState.h"
 
 namespace tokkebi::ui
 {
@@ -62,6 +63,7 @@ private:
   audio::waveform::Coordinator mWaveforms;
   uint64_t mWaveformGeneration = 0;
   audio::waveform::Viewport mWaveformViewport;
+  audio::editor::SelectionState mSelection;
   std::shared_ptr<LocalAudioDialogMailbox> mLocalAudioDialogMailbox = std::make_shared<LocalAudioDialogMailbox>();
   LocalAudioFocusRouter mLocalAudioFocus;
 };
