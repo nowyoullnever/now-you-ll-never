@@ -1,6 +1,10 @@
 # AGENTS.md — Codex / Reviewer Instructions
 
-**PROJECT STATUS: IMPLEMENTATION AUTHORIZED: P02.8.1 — async local audio load, decoder safety and UI contract correction only. Do not begin P02.9 or later work without explicit owner approval.**
+**PROJECT STATUS:**
+
+Follow `MASTER_BLUEPRINT.md`'s canonical Current Development Status section. The next functional task currently authorized by the owner must be stated there before implementation begins.
+
+Development Task numbers `01–34` are global and immutable. `Pxx.N` means global Development Task `N` unless it has an explicitly named correction suffix: `P01.5 = P01 task 05`, `P02.8 = P02 task 08`, `P03.12 = P03 task 12`. A correction such as `P02.8.1` is a correction revision, not a new global task.
 
 ## Mandatory precedence
 
@@ -13,6 +17,8 @@
 
 - Before starting a task, report the exact Requirement IDs (`WEB-007`, `HIS-001`, etc.), file changes planned, tests, and out-of-scope items.
 - Work only on the approved phase (`P00` through `P09`). Never begin a later phase without owner approval.
+- Codex implementation reports are not external approval. Reviewers independently inspect GitHub source, diffs, tests and CI. An externally approved exact head may be merged without requesting the same approval again; Codex must not self-merge a new or unreviewed functional PR.
+- Keep corrections in their functional stage. Once acceptance scope is frozen, Minor/Enhancement ideas do not indefinitely extend it. Treat implementation completeness and CI progress as separate states.
 - Favor short, focused branches (`codex/p00-bootstrap`, etc.) and reviewable diffs. Do not force-push main.
 - Never fake functionality with silent placeholders, fake successful downloads, fake passing tests or fabricated build logs.
 - On any claim of success, provide real build logs, GitHub Actions links or test output. Mark unperformed tests as `NOT TESTED`.

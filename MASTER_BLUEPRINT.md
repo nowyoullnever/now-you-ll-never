@@ -1,10 +1,11 @@
 # tokkebi
 ## 통합 오디오 수집·샘플 라이브러리·DAW 플러그인: MASTER BLUEPRINT
 
-> **문서 상태:** `IMPLEMENTATION AUTHORIZED: P02.9.2 — FROZEN FINAL CORRECTION` · 명세 버전 `0.2.9.2` · 작성 기준일 `2026-10-14`
+> **문서 상태:** `ROADMAP RESTORED — CANONICAL 34-TASK PLAN` · canonical plan version `0.2.9-roadmap-recovery` · 작성 기준일 `2026-10-14`
 > **대상 저장소:** https://github.com/nowyoullnever/tokkebi · 기본 브랜치 `main`
 > **제품명:** `tokkebi`는 확정된 공식 제품명이다. 최종 앱 라이선스는 별도 결정이 필요하다.
-> **현재 프로젝트 단계:** P02.9.2 waveform foundation의 동결 최종 보정만 승인됨. playback, playhead, selection, IN/OUT, export 및 P02.10 이후는 승인되지 않았다.
+> **현재 프로젝트 단계:** P02 Audio Editing 진행 중. Development Task 08은 COMPLETE / MERGED, Development Task 09는 다음 기능 작업으로 아직 구현되지 않았으며, Development Task 10은 PR #8의 early waveform work와 PR #9의 parked selection foundation으로 부분 구현 상태다. Development Task 11은 시작하지 않았다.
+> **현재 권한:** Development Task 09는 다음 기능 작업이며, 별도의 명시적 소유자 작업 지시가 있어야 구현을 시작한다. Task 10의 parked work와 Task 11 이후의 새 기능 구현은 각각의 별도 승인 전까지 시작하지 않는다.
 > **개발 기본 원칙:** 유료 API 의존성 없음 / Windows + macOS / Standalone + VST3 + AUv2 / 로컬 우선 / 불필요한 DRM 우회 없음 / 사용자의 샘플 데이터 보존.
 
 ---
@@ -19,6 +20,10 @@
 - 문서를 조용히 다시 쓰지 않는다. 변경마다 버전, 날짜, 변경 이유, 연관된 요구사항 ID, 기존 데이터 호환성 영향을 기록한다.
 - **현재는 검토용 초안이다.** 이 파일을 확정된 출시 계약으로 간주하지 말고 수정 후보를 자유롭게 제안한다. 승인 이후에는 기준선으로 사용한다.
 - `필수/확장/조건부/제외/미확정`은 구현 여부를 뜻하며, `P00…P09`는 **구현 시점**을 뜻한다. 확장 기능도 제품 범위에는 포함되지만 1차 릴리스 보장은 아니다.
+
+### 00.1.1 전역 Development Task 번호 규칙
+
+Development Task 번호 `01–34`는 전역적이며 불변이다. `Pxx.N` 형식의 표기에서 `N`은 명시적인 correction suffix가 아닌 한 전역 Development Task 번호를 뜻한다. `P01.5 = Phase P01, Development Task 05`, `P02.8 = Phase P02, Development Task 08`, `P03.12 = Phase P03, Development Task 12`이다. `N`을 phase-local 임의 하위 단계로 재해석하지 않는다. `P02.8.1`처럼 추가된 `.1`은 새 전역 Task가 아니라 Task 08의 correction revision이다.
 
 ### 00.2 요구사항 상태와 증거
 
@@ -1069,10 +1074,73 @@ Priority: Must / Should / Future / Remove
 
 ---
 
+# 25.1 Canonical 34-Task Development Schedule
+
+이 표는 구현 순서의 유일한 기준이다. `P00=Tasks 01–04`, `P01=05–07`, `P02=08–11`, `P03=12–14`, `P04=15–18`, `P05=19–22`, `P06=23–24`, `P07=25–28`, `P08=29–31`, `P09=32–34`이다.
+
+| Phase | Development Task | Canonical scope |
+|---|---:|---|
+| P00 | 01 | Master documents / AGENTS.md / GitHub structure |
+| P00 | 02 | Minimal iPlug2/CMake Standalone build |
+| P00 | 03 | VST3/AUv2 targets + GitHub Actions build verification |
+| P00 | 04 | Font assets / licenses / bundle verification |
+| P01 | 05 | Color/font/button/panel design tokens |
+| P01 | 06 | WEB/P2P/INBOX/LIBRARY/HISTORY/SETTINGS screen structure |
+| P01 | 07 | Common input components, status bar, Settings, responsive window behavior |
+| P02 | 08 | Local file loading and audio information |
+| P02 | 09 | Playback / Stop / Volume / Audio output |
+| P02 | 10 | Waveform / Zoom / range markers |
+| P02 | 11 | IN/OUT extraction and WAV/etc export |
+| P03 | 12 | Plugin State and project path settings |
+| P03 | 13 | OS file Drag & Drop and fallback behavior |
+| P03 | 14 | FL Studio / Ableton / Logic compatibility and project reopen verification |
+| P04 | 15 | JSON Sidecar and SQLite schema |
+| P04 | 16 | Library CRUD, Tags, Description, Search |
+| P04 | 17 | text-only History |
+| P04 | 18 | Inbox and separation of source/cache/final files |
+| P05 | 19 | yt-dlp / FFmpeg / Deno detection and Helper execution |
+| P05 | 20 | URL resolution and normal file download |
+| P05 | 21 | Download queue / progress / cancel / retry |
+| P05 | 22 | Section download and local cache reuse |
+| P06 | 23 | Spotify / Apple Music public metadata lookup |
+| P06 | 24 | YouTube candidate search / scoring / manual selection |
+| P07 | 25 | qBittorrent connection and Magnet handling |
+| P07 | 26 | Torrent file selection and completed-file import |
+| P07 | 27 | SoulseekQt download-folder watcher |
+| P07 | 28 | slskd search/download API |
+| P08 | 29 | Playlist / album / batch sample processing |
+| P08 | 30 | Recovery / data integrity / performance optimization |
+| P08 | 31 | Auto Slice and other advanced editing + conditional Web Capture review |
+| P09 | 32 | Windows NSIS install/update/uninstall |
+| P09 | 33 | macOS PKG install/sign/notarization configuration |
+| P09 | 34 | GitHub Releases / license notices / installation and regression QA |
+
+**Phase exit conditions:** P00 builds the real app/base plugin targets with governing documents and fonts present. P01 provides navigable tabs with correct Korean text, fonts, graphics and supported scaling. P02 opens local audio and saves a selected interval with exact expected duration. P03 opens reliably in supported DAWs and brings samples into a DAW; untested host cases remain `NOT TESTED`. P04 stores, searches and previews samples offline while History stays independent. P05 turns supported URLs into sectionable audio imported to Library. P06 identifies intended tracks and offers source candidates, with unresolved policy integrations feature-flagged. P07 imports audio to Inbox without damaging external client state. P08 safely recovers from interrupted, missing-file and data-integrity failures under large/batch workloads. P09 lets a normal user install, use, update and remove supported packages.
+
+## 25.2 Canonical Current Development Status
+
+- **Development Task 08 — COMPLETE / MERGED:** PR #7 (`cfafc0b1dedfdda98c88e5fb1178de598c3ce3f7`) delivered local file loading, WAV decoding, audio information and the async loader foundation.
+- **Development Task 09 — NOT COMPLETE / NEXT FUNCTIONAL TASK:** Playback, Stop, Volume and Audio output. Its eventual scoped work must absorb relevant preview transport requirements from `EDT-007`, `EDT-008` and resolved/approved `EDT-009`. It is not started by this recovery.
+- **Development Task 10 — PARTIALLY IMPLEMENTED EARLY:** PR #8, merged as `8b89d509454e82ad9b4e9c552852bd3f108c81ec`, provides real waveform, multiresolution peak cache, mono/L/R, time ruler, zoom, horizontal scrolling and viewport work. PR #9 preserves additional early selection foundation but is Draft and parked. Missing work includes range markers, IN/OUT visual and numeric interaction, waveform drag selection and other frozen Task 10 interactions.
+- **Development Task 11 — NOT STARTED:** IN/OUT extraction, WAV/AIFF/FLAC etc export, and exact output-duration validation.
+
+### 25.3 Historical ordering deviation
+
+Development Task 10 waveform/zoom foundation was implemented early in PR #8 before Development Task 09 playback. This remains valid merged work; history is not rewritten. The project returns to canonical order by completing Development Task 09 before resuming remaining Development Task 10 work. No Development Task after 09 is currently authorized for new implementation.
+
+### 25.4 Durable workflow commitments
+
+- A Codex implementation report is not external approval; reviewers independently inspect GitHub source, diff, tests and CI.
+- Corrections remain in the same functional stage. After acceptance scope is frozen, Minor/Enhancement ideas do not indefinitely extend that stage.
+- Implementation COMPLETE and CI IN_PROGRESS are separate valid states. Do not require another Codex run merely to learn whether CI finished.
+- Do not self-merge a new or unreviewed functional PR. An externally approved exact head may be merged without asking for the same approval again.
+- Do not end required implementation with a progress-only `INCOMPLETE` report except for a genuine external blocker.
+
 # 26. 마스터 문서 변경 이력
 
 | Version | Date | Status | Changes |
 |---|---|---|---|
+| `0.2.9-roadmap-recovery` | 2026-10-14 | **ROADMAP RESTORED / EXTERNALLY REVIEWED** | Canonical 01–34 global task plan and status were restored. Task 08 is merged; Task 09 is the next functional task; Task 10 early waveform work remains valid and PR #9 selection work is parked. No product behavior changed. |
 | `0.2.9.2` | 2026-10-14 | **P02.9.2 frozen final correction authorized** | waveform combined UI state, finest-peak zoom bound, overflow-safe time decomposition, deterministic coordinator and full peak/viewport/render/ruler regression coverage만 보정한다. P02.10 및 playback/selection/export는 승인하지 않았다. |
 | `0.2.9.1` | 2026-10-09 | **P02.9.1 correction authorized** | P02.9 waveform foundation의 shared PCM snapshot, 최신 generation worker, 안전한 viewport/ruler 산술, 실제 INBOX peak rendering 및 Debug/Release waveform test CI 대상을 보정한다. playback, selection, IN/OUT, export와 P02.10은 승인하지 않았다. |
 | `0.2.8.4` | 2026-10-09 | **P02.8.4 correction authorized** | local-audio button의 포커스가 INBOX 밖에 남지 않도록 shell navigation 소유권과 arrow-key 정책만 보정한다. P02.9 기능은 승인하지 않았다. |
@@ -1089,4 +1157,4 @@ Priority: Must / Should / Future / Remove
 | `0.1.1` | 2026-10-06 | **P00.2 implementation authorized; specification under active revision** | 소유자의 명시 승인에 따라 P00.2 native Standalone bootstrap만 시작 가능. 기존 요구사항 ID와 `OPEN-*` 결정은 유지하며 P00.3 이후는 승인되지 않음. |
 | `0.1.0` | 2026-10-06 | **DRAFT, awaiting owner review** | 최초 통합 블루프린트 작성. 화면/디자인·폰트·전 소스·오디오/Library/History·DAW·Helper·설치·라이선스·QA·작업 절차 정리. 코드 개발 미착수. |
 
-> **STOP RULE:** 소유자는 P02.9.2 frozen waveform correction까지만 명시 승인했다. Codex는 playback, playhead, selection, IN/OUT, export, P02.10 이후 기능, 인스톨러 또는 미검증 폰트 업로드를 시작하지 않는다. 본 문서는 계속 검토·수정 중인 명세다.
+> **STOP RULE:** Development Task 09 (Playback / Stop / Volume / Audio output)가 다음 기능 작업이다. 명시적 소유자 지시 없이는 Task 09 구현을 시작하지 않는다. parked 상태인 Task 10 작업을 재개하거나 Task 11 이후 기능을 시작하지 않는다. `OPEN-AUDIO-01`은 열린 상태로 유지한다.
