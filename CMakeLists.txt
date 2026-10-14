@@ -26,6 +26,8 @@ add_library(tokkebi-audio-core
   src/audio/waveform/Waveform.cpp
   src/audio/waveform/WaveformCoordinator.h
   src/audio/waveform/WaveformCoordinator.cpp
+  src/audio/editor/SelectionState.h
+  src/audio/editor/SelectionState.cpp
 )
 target_include_directories(tokkebi-audio-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(tokkebi-audio-core PUBLIC Threads::Threads)
@@ -150,6 +152,10 @@ if(BUILD_TESTING)
   target_link_libraries(tokkebi-waveform-tests PRIVATE tokkebi-audio-core)
   target_compile_features(tokkebi-waveform-tests PRIVATE cxx_std_20)
   add_test(NAME tokkebi.Waveform COMMAND tokkebi-waveform-tests)
+  add_executable(tokkebi-selection-tests tests/SelectionTests.cpp)
+  target_link_libraries(tokkebi-selection-tests PRIVATE tokkebi-audio-core)
+  target_compile_features(tokkebi-selection-tests PRIVATE cxx_std_20)
+  add_test(NAME tokkebi.SelectionEditor COMMAND tokkebi-selection-tests)
 
   add_executable(tokkebi-theme-tests tests/ThemeTests.cpp)
   target_include_directories(tokkebi-theme-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
