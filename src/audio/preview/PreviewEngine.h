@@ -29,6 +29,7 @@ public:
   void FinishForRender() noexcept { mState.store(TransportState::Stopped, std::memory_order_release); }
   double CursorForRender() const noexcept { return mRenderCursor.load(std::memory_order_acquire); }
   void CommitRenderCursor(double cursor, uint64_t frames) noexcept { mRenderCursor.store(cursor, std::memory_order_release); mPosition.store(std::min<uint64_t>(static_cast<uint64_t>(cursor), frames), std::memory_order_release); }
+  float NextRenderGain(float target) noexcept { mRenderGain += (target - mRenderGain) * .02f; return mRenderGain; }
   // Adds preview to outputs. No allocation, locking, ownership transition, I/O or UI work.
   void Render(float** outputs, int outputChannels, int frames) noexcept;
   void Render(double** outputs, int outputChannels, int frames) noexcept;
@@ -40,5 +41,6 @@ private:
   std::atomic<double> mRenderCursor{};
   std::atomic<double> mOutputRate{48000.0};
   std::atomic<float> mGain{1.f}; std::atomic<bool> mMuted{false};
+  float mRenderGain = 1.f;
 };
 }
