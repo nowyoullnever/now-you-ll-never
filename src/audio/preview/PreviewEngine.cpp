@@ -10,7 +10,7 @@ uint64_t PreviewEngine::Frames() const noexcept { const auto* s=mSource.load(std
 void PreviewEngine::Play() noexcept { const auto* s=mSource.load(std::memory_order_acquire); if(!s) return; if(mPosition.load(std::memory_order_acquire)>=s->frames)mPosition.store(0,std::memory_order_release); mState.store(TransportState::Playing,std::memory_order_release); }
 void PreviewEngine::Pause() noexcept { if(mState.load(std::memory_order_acquire)==TransportState::Playing)mState.store(TransportState::Paused,std::memory_order_release); }
 void PreviewEngine::Stop() noexcept { if(mSource.load(std::memory_order_acquire)){mPosition.store(0,std::memory_order_release);mState.store(TransportState::Stopped,std::memory_order_release);} }
-void PreviewEngine::ReturnToStart() noexcept { if(mSource.load(std::memory_order_acquire))mPosition.store(0,std::memory_order_release); }
+void PreviewEngine::ReturnToStart() noexcept { if(mSource.load(std::memory_order_acquire)){mPosition.store(0,std::memory_order_release);mRenderCursor.store(0.,std::memory_order_release);} }
 void PreviewEngine::Seek(uint64_t frame) noexcept { const auto* s=mSource.load(std::memory_order_acquire); if(s){const auto v=std::min(frame,s->frames);mPosition.store(v,std::memory_order_release);mRenderCursor.store(static_cast<double>(v),std::memory_order_release);} }
 void PreviewEngine::SetGain(float gain) noexcept { mGain.store(std::isfinite(gain)?std::clamp(gain,0.f,2.f):1.f,std::memory_order_release); }
 void PreviewEngine::SetMuted(bool muted) noexcept { mMuted.store(muted,std::memory_order_release); }
