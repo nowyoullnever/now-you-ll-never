@@ -12,6 +12,7 @@ int main(){
   e.Publish(Pcm()); CHECK(e.State()==TransportState::Stopped&&e.Position()==0);e.Play();e.Render(out,2,2);CHECK(e.State()==TransportState::Playing&&e.Position()==2&&l[1]>0.9f&&r[1]>0.9f);
   e.Pause();const auto paused=e.Position();e.Render(out,2,2);CHECK(e.State()==TransportState::Paused&&e.Position()==paused);e.ReturnToStart();CHECK(e.State()==TransportState::Paused&&e.Position()==0);e.Play();e.Seek(4);CHECK(e.Position()==4);e.Play();CHECK(e.Position()==0&&e.State()==TransportState::Playing);
   e.SetGain(.5f);e.SetMuted(true);e.Render(out,2,1);CHECK(std::isfinite(l[0]));e.SetMuted(false);e.Stop();CHECK(e.State()==TransportState::Stopped&&e.Position()==0);
+  e.Play(); float restart[1]{}; float* restartOut[]={restart}; e.Render(restartOut,1,1); CHECK(std::fabs(restart[0]) < .001f);
   e.SetGain(1.f); e.Publish(Pcm(2));e.Play();float a[2]{},b[2]{};float* stereo[]={a,b};e.Render(stereo,2,1);CHECK(std::fabs(a[0]-.1f)<.001f&&std::fabs(b[0]-.2f)<.001f);
   e.SetOutputSampleRate(8);e.ReturnToStart();e.Render(stereo,2,2);CHECK(e.Position()==1); e.Clear();CHECK(e.State()==TransportState::Unavailable&&e.Position()==0);
   return failures?1:0;
