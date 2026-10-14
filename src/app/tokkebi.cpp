@@ -17,7 +17,7 @@ Tokkebi::Tokkebi(const iplug::InstanceInfo& info)
                         GetScaleForScreen(PLUG_WIDTH, PLUG_HEIGHT));
   };
 
-  mLayoutFunc = [](iplug::igraphics::IGraphics* graphics) {
+  mLayoutFunc = [this](iplug::igraphics::IGraphics* graphics) {
     using namespace iplug::igraphics;
 
     const bool fontsLoaded = tokkebi::fonts::Load(graphics);
@@ -29,7 +29,7 @@ Tokkebi::Tokkebi(const iplug::InstanceInfo& info)
     const auto background = tokkebi::theme::Get(tokkebi::theme::ThemeMode::Dark).app;
     const IColor backgroundColor {background.a, background.r, background.g, background.b};
     graphics->AttachPanelBackground(backgroundColor);
-    auto* shell = new tokkebi::ui::AppShell(graphics->GetBounds());
+    auto* shell = new tokkebi::ui::AppShell(graphics->GetBounds(), &mPreview);
     graphics->AttachControl(shell);
     graphics->SetDisplayTickFunc([shell] { shell->OnDisplayTick(); });
     graphics->EnableMouseOver(true);
@@ -43,6 +43,7 @@ Tokkebi::Tokkebi(const iplug::InstanceInfo& info)
 #if IPLUG_DSP
 void Tokkebi::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
 {
+  mPreview.SetOutputSampleRate(GetSampleRate());
 #if defined(APP_API)
   // P00.2 Standalone intentionally has no input bus and must remain silent.
   static_cast<void>(inputs);
@@ -62,5 +63,6 @@ void Tokkebi::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
       outputs[channel][frame] = channel < inputChannels ? inputs[channel][frame] : 0.0;
   }
 #endif
+  mPreview.Render(outputs, NOutChansConnected(), nFrames);
 }
 #endif

@@ -22,6 +22,8 @@ add_library(tokkebi-audio-core
   src/audio/AudioDocument.cpp
   src/audio/AudioLoadCoordinator.h
   src/audio/AudioLoadCoordinator.cpp
+  src/audio/preview/PreviewEngine.h
+  src/audio/preview/PreviewEngine.cpp
   src/audio/waveform/Waveform.h
   src/audio/waveform/Waveform.cpp
   src/audio/waveform/WaveformCoordinator.h
@@ -150,6 +152,10 @@ if(BUILD_TESTING)
   target_link_libraries(tokkebi-waveform-tests PRIVATE tokkebi-audio-core)
   target_compile_features(tokkebi-waveform-tests PRIVATE cxx_std_20)
   add_test(NAME tokkebi.Waveform COMMAND tokkebi-waveform-tests)
+  add_executable(tokkebi-preview-tests tests/PreviewTests.cpp)
+  target_link_libraries(tokkebi-preview-tests PRIVATE tokkebi-audio-core)
+  target_compile_features(tokkebi-preview-tests PRIVATE cxx_std_20)
+  add_test(NAME tokkebi.Preview COMMAND tokkebi-preview-tests)
 
   add_executable(tokkebi-theme-tests tests/ThemeTests.cpp)
   target_include_directories(tokkebi-theme-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")

@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "IPlug_include_in_plug_hdr.h"
+#include "../audio/preview/PreviewEngine.h"
 
 using namespace iplug;
 
@@ -13,4 +14,6 @@ public:
 #if IPLUG_DSP
   void ProcessBlock(sample** inputs, sample** outputs, int nFrames) override;
 #endif
+private:
+  tokkebi::audio::preview::PreviewEngine mPreview;
 };

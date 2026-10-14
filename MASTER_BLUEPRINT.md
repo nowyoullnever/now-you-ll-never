@@ -4,8 +4,8 @@
 > **문서 상태:** `ROADMAP RESTORED — CANONICAL 34-TASK PLAN` · canonical plan version `0.2.9-roadmap-recovery` · 작성 기준일 `2026-10-14`
 > **대상 저장소:** https://github.com/nowyoullnever/tokkebi · 기본 브랜치 `main`
 > **제품명:** `tokkebi`는 확정된 공식 제품명이다. 최종 앱 라이선스는 별도 결정이 필요하다.
-> **현재 프로젝트 단계:** P02 Audio Editing 진행 중. Development Task 08은 COMPLETE / MERGED, Development Task 09는 다음 기능 작업으로 아직 구현되지 않았으며, Development Task 10은 PR #8의 early waveform work와 PR #9의 parked selection foundation으로 부분 구현 상태다. Development Task 11은 시작하지 않았다.
-> **현재 권한:** Development Task 09는 다음 기능 작업이며, 별도의 명시적 소유자 작업 지시가 있어야 구현을 시작한다. Task 10의 parked work와 Task 11 이후의 새 기능 구현은 각각의 별도 승인 전까지 시작하지 않는다.
+> **현재 프로젝트 단계:** P02 Audio Editing 진행 중. Development Task 08은 COMPLETE / MERGED, Development Task 09는 IMPLEMENTATION AUTHORIZED / IN PROGRESS이며, Development Task 10은 PR #8의 early waveform work와 PR #9의 parked selection foundation으로 부분 구현 상태다. Development Task 11은 시작하지 않았다.
+> **현재 권한:** Development Task 09 preview transport와 provisional passthrough + preview mix 정책만 구현 승인되었다. `OPEN-AUDIO-01`은 OPEN으로 유지한다. Task 10의 parked work와 Task 11 이후의 새 기능 구현은 각각의 별도 승인 전까지 시작하지 않는다.
 > **개발 기본 원칙:** 유료 API 의존성 없음 / Windows + macOS / Standalone + VST3 + AUv2 / 로컬 우선 / 불필요한 DRM 우회 없음 / 사용자의 샘플 데이터 보존.
 
 ---

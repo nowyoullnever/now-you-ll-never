@@ -10,13 +10,14 @@
 #include "../audio/AudioDocument.h"
 #include "../audio/AudioLoadCoordinator.h"
 #include "../audio/waveform/WaveformCoordinator.h"
+#include "../audio/preview/PreviewEngine.h"
 
 namespace tokkebi::ui
 {
 class AppShell final : public iplug::igraphics::IControl
 {
 public:
-  explicit AppShell(const iplug::igraphics::IRECT& bounds);
+  explicit AppShell(const iplug::igraphics::IRECT& bounds, audio::preview::PreviewEngine* preview = nullptr);
   ~AppShell() override;
 
   void Draw(iplug::igraphics::IGraphics& graphics) override;
@@ -64,5 +65,6 @@ private:
   audio::waveform::Viewport mWaveformViewport;
   std::shared_ptr<LocalAudioDialogMailbox> mLocalAudioDialogMailbox = std::make_shared<LocalAudioDialogMailbox>();
   LocalAudioFocusRouter mLocalAudioFocus;
+  audio::preview::PreviewEngine* mPreview = nullptr;
 };
 }
