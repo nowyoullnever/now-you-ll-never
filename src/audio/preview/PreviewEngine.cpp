@@ -1,21 +1,113 @@
 #include "PreviewEngine.h"
+
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace tokkebi::audio::preview {
-void PreviewEngine::SetOutputSampleRate(double rate) noexcept { if (std::isfinite(rate) && rate > 0.) mOutputRate.store(rate, std::memory_order_release); }
-void PreviewEngine::Publish(std::shared_ptr<const DecodedPcm> source) { if (!source || !source->channels || !source->sampleRate || source->frames > std::numeric_limits<size_t>::max()/source->channels || source->interleaved.size() != source->frames * source->channels) { Clear(); return; } mRetained.push_back(source); mSource.store(source.get(), std::memory_order_release); mPosition.store(0, std::memory_order_release); mRenderCursor.store(0., std::memory_order_release); mRenderGain=mGain.load(std::memory_order_acquire); mState.store(TransportState::Stopped, std::memory_order_release); }
-void PreviewEngine::Clear() noexcept { mSource.store(nullptr, std::memory_order_release); mPosition.store(0, std::memory_order_release); mRenderCursor.store(0., std::memory_order_release); mState.store(TransportState::Unavailable, std::memory_order_release); }
-uint64_t PreviewEngine::Frames() const noexcept { const auto* s=mSource.load(std::memory_order_acquire); return s?s->frames:0; }
-void PreviewEngine::Play() noexcept { const auto* s=mSource.load(std::memory_order_acquire); if(!s) return; if(mPosition.load(std::memory_order_acquire)>=s->frames){mPosition.store(0,std::memory_order_release);mRenderCursor.store(0.,std::memory_order_release);} mState.store(TransportState::Playing,std::memory_order_release); }
-void PreviewEngine::Pause() noexcept { if(mState.load(std::memory_order_acquire)==TransportState::Playing)mState.store(TransportState::Paused,std::memory_order_release); }
-void PreviewEngine::Stop() noexcept { if(mSource.load(std::memory_order_acquire)){mPosition.store(0,std::memory_order_release);mRenderCursor.store(0.,std::memory_order_release);mState.store(TransportState::Stopped,std::memory_order_release);} }
-void PreviewEngine::ReturnToStart() noexcept { if(mSource.load(std::memory_order_acquire)){mPosition.store(0,std::memory_order_release);mRenderCursor.store(0.,std::memory_order_release);} }
-void PreviewEngine::Seek(uint64_t frame) noexcept { const auto* s=mSource.load(std::memory_order_acquire); if(s){const auto v=std::min(frame,s->frames);mPosition.store(v,std::memory_order_release);mRenderCursor.store(static_cast<double>(v),std::memory_order_release);} }
-void PreviewEngine::SetGain(float gain) noexcept { mGain.store(std::isfinite(gain)?std::clamp(gain,0.f,2.f):1.f,std::memory_order_release); }
-void PreviewEngine::SetMuted(bool muted) noexcept { mMuted.store(muted,std::memory_order_release); }
-template <typename T> static void RenderImpl(PreviewEngine& e,T** outputs,int outputChannels,int frames) noexcept { const auto* s=e.SourceForRender(); if(!s||e.State()!=TransportState::Playing||!outputs||frames<=0)return; const double ratio=static_cast<double>(s->sampleRate)/e.OutputRateForRender(); const float target=e.Muted()?0.f:e.Gain(); double cursor=e.CursorForRender(); for(int f=0;f<frames;++f){const float renderGain=e.NextRenderGain(target); const uint64_t i=static_cast<uint64_t>(cursor);if(i>=s->frames){e.Seek(s->frames);e.FinishForRender();return;}const uint64_t next=std::min(i+1,s->frames-1);const float frac=static_cast<float>(cursor-static_cast<double>(i));for(int ch=0;ch<outputChannels;++ch){const uint32_t sourceCh=s->channels==1?0:static_cast<uint32_t>(std::min(ch,1));const float a=s->interleaved[static_cast<size_t>(i*s->channels+sourceCh)],b=s->interleaved[static_cast<size_t>(next*s->channels+sourceCh)];const float v=(a+(b-a)*frac)*renderGain;if(std::isfinite(v))outputs[ch][f]+=static_cast<T>(v);}cursor+=ratio;}e.CommitRenderCursor(cursor,s->frames); }
-void PreviewEngine::Render(float** o,int c,int f) noexcept { RenderImpl(*this,o,c,f); }
-void PreviewEngine::Render(double** o,int c,int f) noexcept { RenderImpl(*this,o,c,f); }
+namespace {
+constexpr float kGainSmoothing = .02f;
+template <typename T> T ProtectedMix(T host, float preview) noexcept
+{
+  if (preview == 0.f) return host; // inactive preview leaves passthrough bit-exact.
+  const float input = std::isfinite(static_cast<float>(host)) ? static_cast<float>(host) : 0.f;
+  const float mixed = input + preview;
+  return static_cast<T>(std::clamp(std::isfinite(mixed) ? mixed : 0.f, -1.f, 1.f));
+}
 }
 
+bool PreviewEngine::Valid(const DecodedPcm& source) noexcept
+{
+  return source.channels != 0 && source.sampleRate != 0 &&
+    source.frames <= std::numeric_limits<size_t>::max() / source.channels &&
+    source.interleaved.size() == source.frames * source.channels;
+}
+float PreviewEngine::SanitizeGain(float gain) noexcept
+{
+  return std::isfinite(gain) ? std::clamp(gain, 0.f, 2.f) : 1.f;
+}
+bool PreviewEngine::Push(Command command) noexcept
+{
+  const uint32_t write = mWrite.load(std::memory_order_relaxed);
+  const uint32_t next = (write + 1U) % kCommandCapacity;
+  if (next == mRead.load(std::memory_order_acquire))
+  {
+    mLastFailure.store(CommandFailure::QueueFull, std::memory_order_release);
+    return false;
+  }
+  mCommands[write] = command;
+  mWrite.store(next, std::memory_order_release);
+  mLastFailure.store(CommandFailure::None, std::memory_order_release);
+  return true;
+}
+bool PreviewEngine::Pop(Command& command) noexcept
+{
+  const uint32_t read = mRead.load(std::memory_order_relaxed);
+  if (read == mWrite.load(std::memory_order_acquire)) return false;
+  command = mCommands[read];
+  mRead.store((read + 1U) % kCommandCapacity, std::memory_order_release);
+  return true;
+}
+bool PreviewEngine::Publish(std::shared_ptr<const DecodedPcm> source)
+{
+  if (!source || !Valid(*source)) { mLastFailure.store(CommandFailure::InvalidSource, std::memory_order_release); return Clear(); }
+  const uint64_t generation = ++mNextGeneration;
+  if (!Push({CommandType::InstallSource, source.get(), generation})) return false;
+  mSources.push_back({generation, std::move(source)});
+  return true;
+}
+bool PreviewEngine::Clear() noexcept { return Push({CommandType::ClearSource, nullptr, ++mNextGeneration}); }
+bool PreviewEngine::Play() noexcept { return Push({CommandType::Play}); }
+bool PreviewEngine::Pause() noexcept { return Push({CommandType::Pause}); }
+bool PreviewEngine::Stop() noexcept { return Push({CommandType::Stop}); }
+bool PreviewEngine::ReturnToStart() noexcept { return Push({CommandType::ReturnToStart}); }
+bool PreviewEngine::Seek(uint64_t frame) noexcept { Command c{CommandType::Seek}; c.frame=frame; return Push(c); }
+bool PreviewEngine::SetGain(float gain) noexcept { Command c{CommandType::SetGain}; c.gain=SanitizeGain(gain); return Push(c); }
+bool PreviewEngine::SetMuted(bool muted) noexcept { Command c{CommandType::SetMute}; c.muted=muted; return Push(c); }
+void PreviewEngine::Maintain() noexcept
+{
+  const uint64_t acknowledged = mAcknowledgedGeneration.load(std::memory_order_acquire);
+  while (!mSources.empty() && mSources.front().generation < acknowledged) mSources.pop_front();
+  if (acknowledged != 0 && !mSources.empty() && mSources.front().generation < acknowledged) mSources.pop_front();
+}
+void PreviewEngine::Apply(const Command& command) noexcept
+{
+  switch (command.type)
+  {
+    case CommandType::InstallSource: mActiveSource=command.source; mActiveGeneration=command.generation; mState=TransportState::Stopped; mCursor=0.; mRenderGain=mMuted?0.f:mTargetGain; mAcknowledgedGeneration.store(command.generation,std::memory_order_release); break;
+    case CommandType::ClearSource: mActiveSource=nullptr; mActiveGeneration=command.generation; mState=TransportState::Unavailable; mCursor=0.; mRenderGain=0.f; mAcknowledgedGeneration.store(command.generation,std::memory_order_release); break;
+    case CommandType::Play: if(mActiveSource){if(mCursor>=static_cast<double>(mActiveSource->frames))mCursor=0.;mState=TransportState::Playing;} break;
+    case CommandType::Pause: if(mState==TransportState::Playing)mState=TransportState::Paused; break;
+    case CommandType::Stop: if(mActiveSource){mState=TransportState::Stopped;mCursor=0.;} break;
+    case CommandType::ReturnToStart: if(mActiveSource)mCursor=0.; break;
+    case CommandType::Seek: if(mActiveSource)mCursor=static_cast<double>(std::min(command.frame,mActiveSource->frames)); break;
+    case CommandType::SetGain: mTargetGain=command.gain;if(mTargetGain==0.f)mRenderGain=0.f;break;
+    case CommandType::SetMute: mMuted=command.muted;mRenderGain=0.f;break;
+  }
+}
+void PreviewEngine::PublishSnapshot() noexcept
+{
+  auto& s=mSnapshot; s.sequence.fetch_add(1,std::memory_order_release);
+  s.generation.store(mActiveGeneration,std::memory_order_relaxed);s.state.store(static_cast<uint8_t>(mState),std::memory_order_relaxed);
+  s.position.store(mActiveSource?std::min<uint64_t>(static_cast<uint64_t>(mCursor),mActiveSource->frames):0,std::memory_order_relaxed);s.frames.store(mActiveSource?mActiveSource->frames:0,std::memory_order_relaxed);
+  s.gain.store(mTargetGain,std::memory_order_relaxed);s.muted.store(mMuted,std::memory_order_relaxed);s.available.store(mActiveSource!=nullptr,std::memory_order_relaxed);
+  s.sequence.fetch_add(1,std::memory_order_release);
+}
+TransportSnapshot PreviewEngine::Snapshot() const noexcept
+{
+  TransportSnapshot snapshot;
+  for(int attempts=0;attempts<8;++attempts){const auto begin=mSnapshot.sequence.load(std::memory_order_acquire);if(begin&1U)continue;snapshot.generation=mSnapshot.generation.load(std::memory_order_relaxed);snapshot.state=static_cast<TransportState>(mSnapshot.state.load(std::memory_order_relaxed));snapshot.position=mSnapshot.position.load(std::memory_order_relaxed);snapshot.frames=mSnapshot.frames.load(std::memory_order_relaxed);snapshot.gain=mSnapshot.gain.load(std::memory_order_relaxed);snapshot.muted=mSnapshot.muted.load(std::memory_order_relaxed);snapshot.sourceAvailable=mSnapshot.available.load(std::memory_order_relaxed);if(begin==mSnapshot.sequence.load(std::memory_order_acquire))return snapshot;}
+  return snapshot;
+}
+template <typename T> void RenderImpl(PreviewEngine& engine,T** outputs,int outputChannels,int frames,double outputRate) noexcept
+{
+  PreviewEngine::Command command;while(engine.Pop(command))engine.Apply(command);
+  if(!std::isfinite(outputRate)||outputRate<=0.)outputRate=48000.;const auto* source=engine.mActiveSource;
+  if(!source||engine.mState!=TransportState::Playing||!outputs||outputChannels<=0||frames<=0){engine.PublishSnapshot();return;}
+  const double ratio=static_cast<double>(source->sampleRate)/outputRate;
+  for(int frame=0;frame<frames;++frame){if(engine.mCursor>=static_cast<double>(source->frames)){engine.mCursor=static_cast<double>(source->frames);engine.mState=TransportState::Stopped;break;}const uint64_t first=static_cast<uint64_t>(engine.mCursor);const uint64_t next=std::min(first+1,source->frames-1);const float fraction=static_cast<float>(engine.mCursor-static_cast<double>(first));const float gain=engine.mMuted?0.f:(engine.mRenderGain+=(engine.mTargetGain-engine.mRenderGain)*kGainSmoothing);for(int channel=0;channel<outputChannels;++channel){const uint32_t inputChannel=source->channels==1?0:static_cast<uint32_t>(std::min(channel,1));const float a=source->interleaved[static_cast<size_t>(first*source->channels+inputChannel)],b=source->interleaved[static_cast<size_t>(next*source->channels+inputChannel)];const float preview=std::isfinite(a)&&std::isfinite(b)?(a+(b-a)*fraction)*gain:0.f;outputs[channel][frame]=ProtectedMix(outputs[channel][frame],std::isfinite(preview)?preview:0.f);}engine.mCursor+=ratio;}
+  if(engine.mCursor>=static_cast<double>(source->frames)){engine.mCursor=static_cast<double>(source->frames);engine.mState=TransportState::Stopped;}engine.PublishSnapshot();
+}
+void PreviewEngine::Render(float** outputs,int channels,int frames,double rate) noexcept { RenderImpl(*this,outputs,channels,frames,rate); }
+void PreviewEngine::Render(double** outputs,int channels,int frames,double rate) noexcept { RenderImpl(*this,outputs,channels,frames,rate); }
+}

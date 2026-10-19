@@ -9,9 +9,9 @@ Current merged implementation:
 - Through Development Task 08: local loading, WAV decoding, audio information and async loading.
 - Substantial Development Task 10 waveform foundation was implemented early in merged PR #8.
 
-Next planned functional task:
+Current review task:
 
-- Development Task 09 — Playback / Stop / Volume / Audio output.
+- Development Task 09 — Playback / Stop / Volume / Audio output is IMPLEMENTATION COMPLETE / EXTERNAL REVIEW PENDING on PR #11. `OPEN-AUDIO-01` remains OPEN.
 
 Parked:
 

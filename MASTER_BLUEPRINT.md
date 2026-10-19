@@ -1120,7 +1120,7 @@ Priority: Must / Should / Future / Remove
 ## 25.2 Canonical Current Development Status
 
 - **Development Task 08 — COMPLETE / MERGED:** PR #7 (`cfafc0b1dedfdda98c88e5fb1178de598c3ce3f7`) delivered local file loading, WAV decoding, audio information and the async loader foundation.
-- **Development Task 09 — NOT COMPLETE / NEXT FUNCTIONAL TASK:** Playback, Stop, Volume and Audio output. Its eventual scoped work must absorb relevant preview transport requirements from `EDT-007`, `EDT-008` and resolved/approved `EDT-009`. It is not started by this recovery.
+- **Development Task 09 — IMPLEMENTATION COMPLETE / EXTERNAL REVIEW PENDING:** PR #11 provides playback, Stop, Preview Volume, audio output and the bounded realtime transport/reclamation architecture. `OPEN-AUDIO-01` remains OPEN pending actual host validation; this status is not external approval.
 - **Development Task 10 — PARTIALLY IMPLEMENTED EARLY:** PR #8, merged as `8b89d509454e82ad9b4e9c552852bd3f108c81ec`, provides real waveform, multiresolution peak cache, mono/L/R, time ruler, zoom, horizontal scrolling and viewport work. PR #9 preserves additional early selection foundation but is Draft and parked. Missing work includes range markers, IN/OUT visual and numeric interaction, waveform drag selection and other frozen Task 10 interactions.
 - **Development Task 11 — NOT STARTED:** IN/OUT extraction, WAV/AIFF/FLAC etc export, and exact output-duration validation.
 

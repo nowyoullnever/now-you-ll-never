@@ -43,6 +43,8 @@ private:
   void PromptForLocalAudio();
   Rect LocalAudioButtonBounds(const ShellLayout& layout) const;
   Rect WaveformBounds(const ShellLayout& layout) const;
+  Rect PreviewControlBounds(const ShellLayout& layout, int index) const;
+  Rect PreviewVolumeBounds(const ShellLayout& layout) const;
   void Redraw();
 
   NavigationState mState;
@@ -66,5 +68,7 @@ private:
   std::shared_ptr<LocalAudioDialogMailbox> mLocalAudioDialogMailbox = std::make_shared<LocalAudioDialogMailbox>();
   LocalAudioFocusRouter mLocalAudioFocus;
   audio::preview::PreviewEngine* mPreview = nullptr;
+  audio::preview::TransportSnapshot mLastPreviewSnapshot;
+  bool mPreviewVolumeFocused = false;
 };
 }

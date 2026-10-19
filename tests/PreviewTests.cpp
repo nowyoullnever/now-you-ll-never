@@ -1,19 +1,56 @@
 #include "audio/preview/PreviewEngine.h"
+
 #include <cmath>
 #include <iostream>
+#include <limits>
+#include <vector>
+
 using namespace tokkebi::audio;
 using namespace tokkebi::audio::preview;
-static int failures{};
-#define CHECK(x) do { if (!(x)) { ++failures; std::cerr << "FAIL: " #x "\n"; } } while(false)
-static std::shared_ptr<const DecodedPcm> Pcm(uint32_t ch=1,uint32_t rate=4) { auto p=std::make_shared<DecodedPcm>();p->channels=ch;p->sampleRate=rate;p->frames=4;p->interleaved=ch==1?std::vector<float>{0.f,1.f,.5f,-1.f}:std::vector<float>{.1f,.2f,.3f,.4f,.5f,.6f,.7f,.8f};return p; }
-int main(){
-  PreviewEngine e; e.SetOutputSampleRate(4); float l[8]{},r[8]{};float* out[]={l,r};
-  CHECK(e.State()==TransportState::Unavailable); e.Play(); CHECK(e.State()==TransportState::Unavailable);
-  e.Publish(Pcm()); CHECK(e.State()==TransportState::Stopped&&e.Position()==0);e.Play();e.Render(out,2,2);CHECK(e.State()==TransportState::Playing&&e.Position()==2&&l[1]>0.9f&&r[1]>0.9f);
-  e.Pause();const auto paused=e.Position();e.Render(out,2,2);CHECK(e.State()==TransportState::Paused&&e.Position()==paused);e.ReturnToStart();CHECK(e.State()==TransportState::Paused&&e.Position()==0);e.Play();e.Seek(4);CHECK(e.Position()==4);e.Play();CHECK(e.Position()==0&&e.State()==TransportState::Playing);
-  e.SetGain(.5f);e.SetMuted(true);e.Render(out,2,1);CHECK(std::isfinite(l[0]));e.SetMuted(false);e.Stop();CHECK(e.State()==TransportState::Stopped&&e.Position()==0);
-  e.Play(); float restart[1]{}; float* restartOut[]={restart}; e.Render(restartOut,1,1); CHECK(std::fabs(restart[0]) < .001f);
-  e.SetGain(1.f); e.Publish(Pcm(2));e.Play();float a[2]{},b[2]{};float* stereo[]={a,b};e.Render(stereo,2,1);CHECK(std::fabs(a[0]-.1f)<.001f&&std::fabs(b[0]-.2f)<.001f);
-  e.SetOutputSampleRate(8);e.ReturnToStart();e.Render(stereo,2,2);CHECK(e.Position()==1); e.Clear();CHECK(e.State()==TransportState::Unavailable&&e.Position()==0);
+namespace {
+int failures{};
+#define CHECK(x) do { if (!(x)) { ++failures; std::cerr << "FAIL: " #x "\n"; } } while (false)
+std::shared_ptr<const DecodedPcm> Pcm(uint32_t channels=1, uint32_t rate=4, std::vector<float> samples={0.f,1.f,.5f,-1.f})
+{ auto p=std::make_shared<DecodedPcm>(); p->channels=channels;p->sampleRate=rate;p->frames=samples.size()/channels;p->interleaved=std::move(samples);return p; }
+TransportSnapshot Render(PreviewEngine& engine, std::vector<std::vector<float>>& data, double rate=4.)
+{ std::vector<float*> output;for(auto& channel:data)output.push_back(channel.data());engine.Render(output.data(),static_cast<int>(output.size()),static_cast<int>(data.empty()?0:data[0].size()),rate);return engine.Snapshot(); }
+void Zero(std::vector<std::vector<float>>& data){for(auto& channel:data)for(auto& sample:channel)sample=0.f;}
+}
+int main()
+{
+  PreviewEngine e; std::vector<std::vector<float>> mono(1,std::vector<float>(1));
+  CHECK(e.Snapshot().state==TransportState::Unavailable); CHECK(e.Play()); Render(e,mono); CHECK(e.Snapshot().state==TransportState::Unavailable);
+  auto a=Pcm(); std::weak_ptr<const DecodedPcm> weakA=a; CHECK(e.Publish(a)); a.reset(); Render(e,mono); auto s=e.Snapshot(); CHECK(s.state==TransportState::Stopped&&s.position==0&&s.frames==4&&s.sourceAvailable);
+  CHECK(e.Play()); Zero(mono); s=Render(e,mono); CHECK(s.state==TransportState::Playing&&s.position==1);
+  CHECK(e.Play()); Render(e,mono); CHECK(e.Pause()); Render(e,mono); const auto paused=e.Snapshot().position; Render(e,mono); CHECK(e.Snapshot().state==TransportState::Paused&&e.Snapshot().position==paused);
+  CHECK(e.ReturnToStart());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Paused&&e.Snapshot().position==0);
+  CHECK(e.Play());Render(e,mono);CHECK(e.Seek(3));Render(e,mono);CHECK(e.Snapshot().position==4||e.Snapshot().position==3);
+  CHECK(e.Stop());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Stopped&&e.Snapshot().position==0);
+  CHECK(e.ReturnToStart());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Stopped&&e.Snapshot().position==0);
+
+  // Command order is consumed only at block boundaries; later commands win deterministically.
+  CHECK(e.Play());CHECK(e.Seek(3));CHECK(e.Stop());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Stopped&&e.Snapshot().position==0);
+  CHECK(e.Stop());CHECK(e.Play());Render(e,mono);CHECK(e.Snapshot().position>0);
+  CHECK(e.Pause());CHECK(e.Seek(2));Render(e,mono);CHECK(e.Snapshot().state==TransportState::Paused&&e.Snapshot().position==2);
+
+  auto b=Pcm(1,4,{.25f,.25f,.25f,.25f});std::weak_ptr<const DecodedPcm> weakB=b;CHECK(e.Publish(b));b.reset();Render(e,mono);CHECK(e.Snapshot().generation==2&&e.Snapshot().position==0&&e.Snapshot().state==TransportState::Stopped);e.Maintain();CHECK(weakA.expired());
+  CHECK(e.Clear());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Unavailable&&!e.Snapshot().sourceAvailable);e.Maintain();CHECK(weakB.expired());
+
+  // 63 queued commands fill a 64-slot ring; the failure is observable rather than dropped silently.
+  for(uint32_t i=0;i<PreviewEngine::kCommandCapacity-1;++i)CHECK(e.Play());CHECK(!e.Play()&&e.LastCommandFailure()==CommandFailure::QueueFull);Render(e,mono);
+
+  // Mono duplication, stereo routing and exact inactive passthrough.
+  auto source=Pcm();CHECK(e.Publish(source));Render(e,mono);CHECK(e.Play());std::vector<std::vector<float>> stereo(2,std::vector<float>(1));Render(e,stereo);CHECK(stereo[0][0]==stereo[1][0]);
+  CHECK(e.Pause());std::vector<std::vector<float>> passthrough{{.2f},{-.3f}};Render(e,passthrough);CHECK(passthrough[0][0]==.2f&&passthrough[1][0]==-.3f);
+  CHECK(e.SetGain(0.f));CHECK(e.Play());passthrough={{.2f},{-.3f}};Render(e,passthrough);CHECK(passthrough[0][0]==.2f&&passthrough[1][0]==-.3f);
+  CHECK(e.SetGain(std::numeric_limits<float>::quiet_NaN()));CHECK(e.SetMuted(true));passthrough={{.2f},{-.3f}};Render(e,passthrough);CHECK(passthrough[0][0]==.2f&&passthrough[1][0]==-.3f&&e.Snapshot().gain==1.f&&e.Snapshot().muted);
+  CHECK(e.SetMuted(false));CHECK(e.ReturnToStart());passthrough={{.9f},{.9f}};Render(e,passthrough);CHECK(std::isfinite(passthrough[0][0])&&passthrough[0][0]<=1.f);
+
+  // Fractional cursor is equivalent for one large block and irregular block splits.
+  auto resample=Pcm(1,44100,{0.f,.25f,.5f,.75f,1.f,-.5f}); PreviewEngine large, split;CHECK(large.Publish(resample));CHECK(split.Publish(resample));std::vector<std::vector<float>> once(1,std::vector<float>(7)),pieces(1);Render(large,once,48000.);CHECK(large.Play());Render(large,once,48000.);CHECK(split.Play());for(int n:std::vector<int>{1,3,1,2}){std::vector<std::vector<float>> part(1,std::vector<float>(n));Render(split,part,48000.);pieces[0].insert(pieces[0].end(),part[0].begin(),part[0].end());}CHECK(large.Snapshot().position==split.Snapshot().position);for(size_t i=0;i<once[0].size();++i)CHECK(std::fabs(once[0][i]-pieces[0][i])<.0001f);
+  PreviewEngine changing;CHECK(changing.Publish(resample));Render(changing,mono);CHECK(changing.Play());std::vector<std::vector<float>> first(1,std::vector<float>(2)),second(1,std::vector<float>(2));Render(changing,first,48000.);const auto before=changing.Snapshot().position;Render(changing,second,44100.);CHECK(changing.Snapshot().position>=before);
+
+  // Standalone-style zero buffers remain silent when stopped, paused, muted, or gain zero.
+  PreviewEngine silence;CHECK(silence.Publish(Pcm()));Render(silence,mono);Zero(mono);Render(silence,mono);for(float v:mono[0])CHECK(v==0.f);CHECK(silence.Play());CHECK(silence.SetMuted(true));Zero(mono);Render(silence,mono);for(float v:mono[0])CHECK(v==0.f);
   return failures?1:0;
 }

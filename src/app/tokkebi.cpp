@@ -43,7 +43,6 @@ Tokkebi::Tokkebi(const iplug::InstanceInfo& info)
 #if IPLUG_DSP
 void Tokkebi::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
 {
-  mPreview.SetOutputSampleRate(GetSampleRate());
 #if defined(APP_API)
   // P00.2 Standalone intentionally has no input bus and must remain silent.
   static_cast<void>(inputs);
@@ -63,6 +62,6 @@ void Tokkebi::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
       outputs[channel][frame] = channel < inputChannels ? inputs[channel][frame] : 0.0;
   }
 #endif
-  mPreview.Render(outputs, NOutChansConnected(), nFrames);
+  mPreview.Render(outputs, NOutChansConnected(), nFrames, GetSampleRate());
 }
 #endif
