@@ -69,6 +69,5 @@ private:
   LocalAudioFocusRouter mLocalAudioFocus;
   audio::preview::PreviewEngine* mPreview = nullptr;
   audio::preview::TransportSnapshot mLastPreviewSnapshot;
-  bool mPreviewVolumeFocused = false;
 };
 }

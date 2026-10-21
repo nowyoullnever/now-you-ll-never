@@ -92,7 +92,10 @@ Rect AppShell::LocalAudioButtonBounds(const ShellLayout& layout) const
 Rect AppShell::WaveformBounds(const ShellLayout& layout) const
 {
   const auto content = layout.contentPadding;
-  return {content.x + 210.f, content.y + 92.f, std::max(0.f, content.width - 210.f), 170.f};
+  constexpr float kTop = 190.f;
+  constexpr float kFooter = 42.f;
+  return {content.x, content.y + kTop, std::max(0.f, content.width),
+          std::max(0.f, std::min(170.f, content.height - kTop - kFooter))};
 }
 Rect AppShell::PreviewControlBounds(const ShellLayout& layout, int index) const
 { const auto content=layout.contentPadding; return {content.x+200.f+static_cast<float>(index)*72.f,content.y+92.f,68.f,28.f}; }
@@ -178,17 +181,18 @@ void AppShell::Draw(IGraphics& graphics)
       status += "\nBUILDING WAVEFORM…";
     else if (uiState == audio::waveform::UiState::WaveformFailed)
       status += "\nWAVEFORM UNAVAILABLE\n" + mWaveforms.Diagnostic();
-    graphics.DrawText({12.f, color(tokens.textSecondary), fonts::kTechnical}, status.c_str(), local({content.x, content.y + 128.f, content.width, 154.f}));
+    const auto waveformBounds = WaveformBounds(layout);
+    graphics.DrawText({12.f, color(tokens.textSecondary), fonts::kTechnical}, status.c_str(), local({content.x, waveformBounds.y + waveformBounds.height + 24.f, content.width, 18.f}));
     if (mPreview)
     {
       const auto snapshot=mLastPreviewSnapshot; const bool available=snapshot.sourceAvailable;
       const char* labels[]={snapshot.state==audio::preview::TransportState::Playing?"PAUSE":"PLAY","STOP","RETURN",snapshot.muted?"MUTED":"MUTE"};
       for(int i=0;i<4;++i){const bool enabled=available && (i!=0 || snapshot.state!=audio::preview::TransportState::Unavailable);const auto b=PreviewControlBounds(layout,i);graphics.FillRect(color(enabled?tokens.actionDefault:tokens.actionDisabled),local(b));graphics.DrawRect(color(tokens.borderDefault),local(b),nullptr,theme::kBorderThin);graphics.DrawText({11.f,color(enabled?tokens.actionText:tokens.textDisabled),fonts::kPrimary},labels[i],local(b));}
-      const auto volume=PreviewVolumeBounds(layout);graphics.FillRect(color(available?tokens.recessed:tokens.actionDisabled),local(volume));const float normalized=std::clamp(snapshot.gain/2.f,0.f,1.f);graphics.FillRect(color(available?tokens.actionDefault:tokens.actionDisabled),local({volume.x,volume.y,volume.width*normalized,volume.height}));graphics.DrawRect(color(mPreviewVolumeFocused?tokens.focusRing:tokens.borderDefault),local(volume),nullptr,mPreviewVolumeFocused?theme::kBorderStandard:theme::kBorderThin);const std::string label="PREVIEW VOLUME "+std::to_string(static_cast<int>(std::lround(snapshot.gain*100.f)))+"%";graphics.DrawText({11.f,color(available?tokens.textPrimary:tokens.textDisabled),fonts::kPrimary},label.c_str(),local({volume.x,volume.y+18.f,volume.width,16.f}));
+      const auto volume=PreviewVolumeBounds(layout);graphics.FillRect(color(available?tokens.recessed:tokens.actionDisabled),local(volume));const float normalized=std::clamp(snapshot.gain/2.f,0.f,1.f);graphics.FillRect(color(available?tokens.actionDefault:tokens.actionDisabled),local({volume.x,volume.y,volume.width*normalized,volume.height}));graphics.DrawRect(color(mLocalAudioFocus.PreviewVolumeFocused()?tokens.focusRing:tokens.borderDefault),local(volume),nullptr,mLocalAudioFocus.PreviewVolumeFocused()?theme::kBorderStandard:theme::kBorderThin);const std::string label="PREVIEW VOLUME "+std::to_string(static_cast<int>(std::lround(snapshot.gain*100.f)))+"%";graphics.DrawText({11.f,color(available?tokens.textPrimary:tokens.textDisabled),fonts::kPrimary},label.c_str(),local({volume.x,volume.y+18.f,volume.width,16.f}));
       const auto rate=mLocalAudioDocument.Info().sampleRate;graphics.DrawText({12.f,color(tokens.textAccent),fonts::kTechnical},(PreviewTime(snapshot.position,rate)+" / "+PreviewTime(snapshot.frames,rate)).c_str(),local({content.x+200.f,content.y+126.f,300.f,20.f}));
     }
-    if (const auto cache = mWaveforms.Cache()) { const Rect canvas=WaveformBounds(layout); graphics.FillRect(color(tokens.waveBackground), local(canvas)); const auto view=mWaveformViewport.Empty()?audio::waveform::FullViewport(cache->frames):mWaveformViewport; const auto plan=audio::waveform::BuildRenderPlan(*cache,view,static_cast<uint32_t>(canvas.width)); for(uint32_t ch=0;ch<cache->channels;++ch){const float mid=canvas.y+canvas.height*(ch+.5f)/cache->channels;graphics.DrawLine(color(tokens.separator),mRECT.L+canvas.x,mRECT.T+mid,mRECT.L+canvas.x+canvas.width,mRECT.T+mid,nullptr,1.f);graphics.DrawText({10.f,color(tokens.technicalOnAudio),fonts::kTechnical},cache->channels==1?"MONO":(ch==0?"L":"R"),local({canvas.x+3.f,mid-9.f,25.f,16.f}));} for(const auto&p:plan.columns){const float mid=canvas.y+canvas.height*(p.channel+.5f)/cache->channels,half=canvas.height/cache->channels/2.f;graphics.DrawLine(color(tokens.wavePrimary),mRECT.L+canvas.x+static_cast<float>(p.x),mRECT.T+mid-p.maximum*half,mRECT.L+canvas.x+static_cast<float>(p.x),mRECT.T+mid-p.minimum*half,nullptr,1.f);} for(const auto&tick:audio::waveform::BuildTimeRuler(view,mLocalAudioDocument.Info().sampleRate,static_cast<uint32_t>(canvas.width))){graphics.DrawLine(color(tokens.separator),mRECT.L+canvas.x+static_cast<float>(tick.x),mRECT.T+canvas.y+canvas.height-8.f,mRECT.L+canvas.x+static_cast<float>(tick.x),mRECT.T+canvas.y+canvas.height,nullptr,1.f);graphics.DrawText({9.f,color(tokens.technicalOnAudio),fonts::kTechnical},tick.label.c_str(),local({canvas.x+static_cast<float>(tick.x),canvas.y+canvas.height-20.f,78.f,12.f}));}const auto snapshot=mLastPreviewSnapshot;if(snapshot.sourceAvailable&&snapshot.position>=view.start&&snapshot.position<=view.end&&view.end>view.start){const float x=canvas.x+canvas.width*static_cast<float>(snapshot.position-view.start)/static_cast<float>(view.end-view.start);graphics.DrawLine(color(tokens.wavePlayhead),mRECT.L+x,mRECT.T+canvas.y,mRECT.L+x,mRECT.T+canvas.y+canvas.height,nullptr,theme::kBorderStandard);} }
-    graphics.DrawText({11.f, color(tokens.textSecondary), fonts::kTechnical}, "WAV/WAVE local waveform. Wheel: zoom, Shift+wheel: scroll, F: full view. No selection, trim or export.", local({content.x, content.y + 286.f, content.width, 24.f}));
+    if (const auto cache = mWaveforms.Cache()) { const Rect canvas=WaveformBounds(layout); graphics.FillRect(color(tokens.waveBackground), local(canvas)); const auto view=mWaveformViewport.Empty()?audio::waveform::FullViewport(cache->frames):mWaveformViewport; const auto plan=audio::waveform::BuildRenderPlan(*cache,view,static_cast<uint32_t>(canvas.width)); for(uint32_t ch=0;ch<cache->channels;++ch){const float mid=canvas.y+canvas.height*(ch+.5f)/cache->channels;graphics.DrawLine(color(tokens.separator),mRECT.L+canvas.x,mRECT.T+mid,mRECT.L+canvas.x+canvas.width,mRECT.T+mid,nullptr,1.f);graphics.DrawText({10.f,color(tokens.technicalOnAudio),fonts::kTechnical},cache->channels==1?"MONO":(ch==0?"L":"R"),local({canvas.x+3.f,mid-9.f,25.f,16.f}));} for(const auto&p:plan.columns){const float mid=canvas.y+canvas.height*(p.channel+.5f)/cache->channels,half=canvas.height/cache->channels/2.f;graphics.DrawLine(color(tokens.wavePrimary),mRECT.L+canvas.x+static_cast<float>(p.x),mRECT.T+mid-p.maximum*half,mRECT.L+canvas.x+static_cast<float>(p.x),mRECT.T+mid-p.minimum*half,nullptr,1.f);} for(const auto&tick:audio::waveform::BuildTimeRuler(view,mLocalAudioDocument.Info().sampleRate,static_cast<uint32_t>(canvas.width))){graphics.DrawLine(color(tokens.separator),mRECT.L+canvas.x+static_cast<float>(tick.x),mRECT.T+canvas.y+canvas.height-8.f,mRECT.L+canvas.x+static_cast<float>(tick.x),mRECT.T+canvas.y+canvas.height,nullptr,1.f);graphics.DrawText({9.f,color(tokens.technicalOnAudio),fonts::kTechnical},tick.label.c_str(),local({canvas.x+static_cast<float>(tick.x),canvas.y+canvas.height-20.f,78.f,12.f}));}const auto snapshot=mLastPreviewSnapshot;if(snapshot.sourceAvailable&&snapshot.position>=view.start&&snapshot.position<=view.end&&view.end>view.start){const float x=canvas.x+static_cast<float>(audio::waveform::FrameToX(view,snapshot.position,canvas.width));graphics.DrawLine(color(tokens.wavePlayhead),mRECT.L+x,mRECT.T+canvas.y,mRECT.L+x,mRECT.T+canvas.y+canvas.height,nullptr,theme::kBorderStandard);} }
+    graphics.DrawText({11.f, color(tokens.textSecondary), fonts::kTechnical}, "WAV/WAVE local waveform. Wheel: zoom, Shift+wheel: scroll, F: full view. No selection, trim or export.", local({content.x, waveformBounds.y + waveformBounds.height + 4.f, content.width, 18.f}));
   }
   if (mState.Selected() == TabId::Settings)
     DrawComponentDemo(graphics, layout);
@@ -254,15 +258,15 @@ void AppShell::OnMouseDown(float x, float y, const IMouseMod&)
   {
     const auto snapshot=mLastPreviewSnapshot;
     for(int which=0;which<4;++which) if(PreviewControlBounds(layout,which).Contains(localX,localY))
-    { if(!snapshot.sourceAvailable)return; if(which==0){if(snapshot.state==audio::preview::TransportState::Playing)mPreview->Pause();else mPreview->Play();}else if(which==1)mPreview->Stop();else if(which==2)mPreview->ReturnToStart();else mPreview->SetMuted(!snapshot.muted); Redraw(); return; }
-    const auto volume=PreviewVolumeBounds(layout);if(volume.Contains(localX,localY)&&snapshot.sourceAvailable){mPreviewVolumeFocused=true;mPreview->SetGain(2.f*std::clamp((localX-volume.x)/volume.width,0.f,1.f));Redraw();return;}
+    { if(!snapshot.sourceAvailable)return; mLocalAudioFocus.Release(); if(which==0){if(snapshot.state==audio::preview::TransportState::Playing)mPreview->Pause();else mPreview->Play();}else if(which==1)mPreview->Stop();else if(which==2)mPreview->ReturnToStart();else mPreview->SetMuted(!snapshot.muted); Redraw(); return; }
+    const auto volume=PreviewVolumeBounds(layout);if(volume.Contains(localX,localY)&&snapshot.sourceAvailable){mLocalAudioFocus.FocusVolume(mState);mPreview->SetGain(2.f*std::clamp((localX-volume.x)/volume.width,0.f,1.f));Redraw();return;}
   }
   if (mState.Selected() == TabId::Inbox && WaveformBounds(layout).Contains(localX, localY) && mPreview && mLastPreviewSnapshot.sourceAvailable && !mWaveformViewport.Empty())
   {
     const auto canvas = WaveformBounds(layout);
     if (canvas.width <= 0.f || mWaveformViewport.end <= mWaveformViewport.start) return;
-    const auto ratio = std::clamp((localX - canvas.x) / canvas.width, 0.f, 1.f);
-    mPreview->Seek(mWaveformViewport.start + static_cast<uint64_t>(ratio * static_cast<float>(mWaveformViewport.end - mWaveformViewport.start)));
+    mLocalAudioFocus.Release();
+    mPreview->Seek(audio::waveform::XToFrame(mWaveformViewport, localX - canvas.x, canvas.width));
     Redraw(); return;
   }
   if (mState.Selected() == TabId::Settings)
@@ -365,22 +369,13 @@ bool AppShell::HandleKey(const iplug::IKeyPress& key)
 
 bool AppShell::HandleLocalAudioKey(const iplug::IKeyPress& key)
 {
-  if (mState.Selected() == TabId::Inbox && mPreview && !mLocalAudioFocus.ButtonFocused())
-  {
-    const auto snapshot=mLastPreviewSnapshot;
-    if (mPreviewVolumeFocused && snapshot.sourceAvailable && (key.VK == iplug::kVK_LEFT || key.VK == iplug::kVK_RIGHT)) { mPreview->SetGain(snapshot.gain + (key.VK==iplug::kVK_LEFT ? -.05f : .05f)); Redraw(); return true; }
-    if (key.VK == 'P' || key.VK == 'p' || key.VK == iplug::kVK_SPACE) { if(snapshot.state==audio::preview::TransportState::Playing)mPreview->Pause();else mPreview->Play(); Redraw(); return true; }
-    if (key.VK == 'S' || key.VK == 's') { mPreview->Stop(); Redraw(); return true; }
-    if (key.VK == 'R' || key.VK == 'r') { mPreview->ReturnToStart(); Redraw(); return true; }
-    if (key.VK == 'M' || key.VK == 'm') { mPreview->SetMuted(!snapshot.muted); Redraw(); return true; }
-  }
-  if (mState.Selected() == TabId::Inbox && (key.VK == 'F' || key.VK == 'f') && !mWaveformViewport.Empty()) { mWaveformViewport = audio::waveform::FullViewport(mWaveformViewport.totalFrames); Redraw(); return true; }
   if (mLocalAudioFocus.ButtonFocused())
   {
     if (key.VK == iplug::kVK_RETURN || key.VK == iplug::kVK_SPACE) { if (mOpenLocalAudioButton.OnKey(key)) PromptForLocalAudio(); Redraw(); return true; }
     if (key.VK == iplug::kVK_TAB)
     {
-      mLocalAudioFocus.ExitButton(mState, key.S);
+      if (!key.S) mLocalAudioFocus.EnterVolume(mState, false);
+      else mLocalAudioFocus.ExitButton(mState, true);
       Redraw();
       return true;
     }
@@ -388,11 +383,39 @@ bool AppShell::HandleLocalAudioKey(const iplug::IKeyPress& key)
       return true;
     return false;
   }
-  if (key.VK == iplug::kVK_TAB && mLocalAudioFocus.EnterButton(mState, key.S))
+  if (mLocalAudioFocus.PreviewVolumeFocused())
+  {
+    if (mPreview && mLastPreviewSnapshot.sourceAvailable && (key.VK == iplug::kVK_LEFT || key.VK == iplug::kVK_RIGHT))
+    {
+      mPreview->SetGain(mLastPreviewSnapshot.gain + (key.VK == iplug::kVK_LEFT ? -.05f : .05f));
+      Redraw();
+      return true;
+    }
+    if (key.VK == iplug::kVK_TAB)
+    {
+      if (key.S) mLocalAudioFocus.EnterButton(mState, true);
+      else mLocalAudioFocus.ExitButton(mState, false);
+      Redraw();
+      return true;
+    }
+    if (key.VK == iplug::kVK_LEFT || key.VK == iplug::kVK_RIGHT || key.VK == iplug::kVK_UP || key.VK == iplug::kVK_DOWN)
+      return true;
+    return false;
+  }
+  if (key.VK == iplug::kVK_TAB && (mLocalAudioFocus.EnterButton(mState, key.S) || mLocalAudioFocus.EnterVolume(mState, key.S)))
   {
     Redraw();
     return true;
   }
+  if (mState.Selected() == TabId::Inbox && mPreview)
+  {
+    const auto snapshot=mLastPreviewSnapshot;
+    if (key.VK == 'P' || key.VK == 'p' || key.VK == iplug::kVK_SPACE) { if(snapshot.state==audio::preview::TransportState::Playing)mPreview->Pause();else mPreview->Play(); Redraw(); return true; }
+    if (key.VK == 'S' || key.VK == 's') { mPreview->Stop(); Redraw(); return true; }
+    if (key.VK == 'R' || key.VK == 'r') { mPreview->ReturnToStart(); Redraw(); return true; }
+    if (key.VK == 'M' || key.VK == 'm') { mPreview->SetMuted(!snapshot.muted); Redraw(); return true; }
+  }
+  if (mState.Selected() == TabId::Inbox && (key.VK == 'F' || key.VK == 'f') && !mWaveformViewport.Empty()) { mWaveformViewport = audio::waveform::FullViewport(mWaveformViewport.totalFrames); Redraw(); return true; }
   return false;
 }
 

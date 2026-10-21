@@ -52,8 +52,22 @@ bool PreviewEngine::Publish(std::shared_ptr<const DecodedPcm> source)
 {
   if (!source || !Valid(*source)) { mLastFailure.store(CommandFailure::InvalidSource, std::memory_order_release); return Clear(); }
   const uint64_t generation = ++mNextGeneration;
-  if (!Push({CommandType::InstallSource, source.get(), generation})) return false;
-  mSources.push_back({generation, std::move(source)});
+  try
+  {
+    // The audio thread receives only a raw pointer. Establish its durable
+    // control-thread owner before making that pointer visible in the queue.
+    mSources.push_back({generation, source});
+  }
+  catch (...)
+  {
+    mLastFailure.store(CommandFailure::OwnershipUnavailable, std::memory_order_release);
+    return false;
+  }
+  if (!Push({CommandType::InstallSource, source.get(), generation}))
+  {
+    mSources.pop_back();
+    return false;
+  }
   return true;
 }
 bool PreviewEngine::Clear() noexcept { return Push({CommandType::ClearSource, nullptr, ++mNextGeneration}); }
@@ -68,7 +82,6 @@ void PreviewEngine::Maintain() noexcept
 {
   const uint64_t acknowledged = mAcknowledgedGeneration.load(std::memory_order_acquire);
   while (!mSources.empty() && mSources.front().generation < acknowledged) mSources.pop_front();
-  if (acknowledged != 0 && !mSources.empty() && mSources.front().generation < acknowledged) mSources.pop_front();
 }
 void PreviewEngine::Apply(const Command& command) noexcept
 {
@@ -95,9 +108,17 @@ void PreviewEngine::PublishSnapshot() noexcept
 }
 TransportSnapshot PreviewEngine::Snapshot() const noexcept
 {
-  TransportSnapshot snapshot;
-  for(int attempts=0;attempts<8;++attempts){const auto begin=mSnapshot.sequence.load(std::memory_order_acquire);if(begin&1U)continue;snapshot.generation=mSnapshot.generation.load(std::memory_order_relaxed);snapshot.state=static_cast<TransportState>(mSnapshot.state.load(std::memory_order_relaxed));snapshot.position=mSnapshot.position.load(std::memory_order_relaxed);snapshot.frames=mSnapshot.frames.load(std::memory_order_relaxed);snapshot.gain=mSnapshot.gain.load(std::memory_order_relaxed);snapshot.muted=mSnapshot.muted.load(std::memory_order_relaxed);snapshot.sourceAvailable=mSnapshot.available.load(std::memory_order_relaxed);if(begin==mSnapshot.sequence.load(std::memory_order_acquire))return snapshot;}
-  return snapshot;
+  // A completed even sequence brackets a coherent snapshot. This deliberately
+  // never returns an unverified fallback after a bounded number of retries.
+  for (;;)
+  {
+    const auto begin = mSnapshot.sequence.load(std::memory_order_acquire);
+    if (begin & 1U) continue;
+    TransportSnapshot snapshot;
+    snapshot.generation=mSnapshot.generation.load(std::memory_order_relaxed);snapshot.state=static_cast<TransportState>(mSnapshot.state.load(std::memory_order_relaxed));snapshot.position=mSnapshot.position.load(std::memory_order_relaxed);snapshot.frames=mSnapshot.frames.load(std::memory_order_relaxed);
+    snapshot.gain=mSnapshot.gain.load(std::memory_order_relaxed);snapshot.muted=mSnapshot.muted.load(std::memory_order_relaxed);snapshot.sourceAvailable=mSnapshot.available.load(std::memory_order_relaxed);
+    if (begin == mSnapshot.sequence.load(std::memory_order_acquire)) return snapshot;
+  }
 }
 template <typename T> void RenderImpl(PreviewEngine& engine,T** outputs,int outputChannels,int frames,double outputRate) noexcept
 {

@@ -127,13 +127,17 @@ int main()
   localAudioNavigation.Select(TabId::Inbox);
   Check(localAudioFocus.EnterButton(localAudioNavigation, false) && localAudioFocus.ButtonFocused(),
         "INBOX plus Tab enters OPEN LOCAL AUDIO");
-  Check(localAudioFocus.ExitButton(localAudioNavigation, false) && !localAudioFocus.ButtonFocused()
+  Check(localAudioFocus.EnterVolume(localAudioNavigation, false) && localAudioFocus.PreviewVolumeFocused(),
+        "OPEN LOCAL AUDIO plus Tab enters PREVIEW VOLUME");
+  Check(localAudioFocus.ExitButton(localAudioNavigation, false) && !localAudioFocus.PreviewVolumeFocused()
         && localAudioNavigation.Focused() == TabId::Library,
-        "OPEN LOCAL AUDIO plus Tab enters LIBRARY");
+        "PREVIEW VOLUME plus Tab enters LIBRARY");
   localAudioNavigation.Select(TabId::Library);
+  Check(localAudioFocus.EnterVolume(localAudioNavigation, true) && localAudioFocus.PreviewVolumeFocused(),
+        "LIBRARY plus Shift+Tab enters PREVIEW VOLUME");
   Check(localAudioFocus.EnterButton(localAudioNavigation, true) && localAudioFocus.ButtonFocused(),
-        "LIBRARY plus Shift+Tab enters OPEN LOCAL AUDIO");
-  Check(localAudioFocus.ExitButton(localAudioNavigation, true) && !localAudioFocus.ButtonFocused()
+        "PREVIEW VOLUME plus Shift+Tab enters OPEN LOCAL AUDIO");
+  Check(localAudioFocus.ExitButton(localAudioNavigation, true) && !localAudioFocus.ButtonFocused() && !localAudioFocus.PreviewVolumeFocused()
         && localAudioNavigation.Focused() == TabId::Inbox,
         "OPEN LOCAL AUDIO plus Shift+Tab enters INBOX");
   localAudioFocus.FocusButton(localAudioNavigation);

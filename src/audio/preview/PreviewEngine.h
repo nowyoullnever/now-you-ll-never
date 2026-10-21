@@ -10,7 +10,7 @@
 
 namespace tokkebi::audio::preview {
 enum class TransportState : uint8_t { Unavailable, Stopped, Playing, Paused };
-enum class CommandFailure : uint8_t { None, QueueFull, InvalidSource };
+enum class CommandFailure : uint8_t { None, QueueFull, InvalidSource, OwnershipUnavailable };
 
 struct TransportSnapshot {
   uint64_t generation{};
