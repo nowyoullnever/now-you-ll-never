@@ -3,6 +3,7 @@
 #include "IControls.h"
 
 #include "layout/ShellLayout.h"
+#include "layout/LocalAudioEditorLayout.h"
 #include "navigation/NavigationState.h"
 #include "navigation/LocalAudioFocusRouter.h"
 #include "components/VisualControls.h"
@@ -10,13 +11,14 @@
 #include "../audio/AudioDocument.h"
 #include "../audio/AudioLoadCoordinator.h"
 #include "../audio/waveform/WaveformCoordinator.h"
+#include "../audio/preview/PreviewEngine.h"
 
 namespace tokkebi::ui
 {
 class AppShell final : public iplug::igraphics::IControl
 {
 public:
-  explicit AppShell(const iplug::igraphics::IRECT& bounds);
+  explicit AppShell(const iplug::igraphics::IRECT& bounds, audio::preview::PreviewEngine* preview = nullptr);
   ~AppShell() override;
 
   void Draw(iplug::igraphics::IGraphics& graphics) override;
@@ -41,7 +43,11 @@ private:
   void ShowDemoNotification();
   void PromptForLocalAudio();
   Rect LocalAudioButtonBounds(const ShellLayout& layout) const;
+  Rect LocalAudioMetadataBounds(const ShellLayout& layout) const;
   Rect WaveformBounds(const ShellLayout& layout) const;
+  Rect WaveformHelpBounds(const ShellLayout& layout) const;
+  Rect PreviewControlBounds(const ShellLayout& layout, int index) const;
+  Rect PreviewVolumeBounds(const ShellLayout& layout) const;
   void Redraw();
 
   NavigationState mState;
@@ -64,5 +70,7 @@ private:
   audio::waveform::Viewport mWaveformViewport;
   std::shared_ptr<LocalAudioDialogMailbox> mLocalAudioDialogMailbox = std::make_shared<LocalAudioDialogMailbox>();
   LocalAudioFocusRouter mLocalAudioFocus;
+  audio::preview::PreviewEngine* mPreview = nullptr;
+  audio::preview::TransportSnapshot mLastPreviewSnapshot;
 };
 }

@@ -9,15 +9,15 @@ Current merged implementation:
 - Through Development Task 08: local loading, WAV decoding, audio information and async loading.
 - Substantial Development Task 10 waveform foundation was implemented early in merged PR #8.
 
-Next planned functional task:
+Current review task:
 
-- Development Task 09 — Playback / Stop / Volume / Audio output.
+- Development Task 09 — Playback / Stop / Volume / Audio output is IMPLEMENTATION COMPLETE / EXTERNAL REVIEW PENDING on PR #11. `OPEN-AUDIO-01` remains OPEN.
 
 Parked:
 
 - PR #9 — early Development Task 10 selection foundation. It is Draft and must not merge before Task 09 is completed and externally reviewed.
 
-AIFF/AIFC and FLAC are recognized but unsupported. Preview, playhead, remaining selection/IN/OUT interactions, conversion/export, persistence, acquisition and Helper IPC are not implemented.
+AIFF/AIFC and FLAC are recognized but unsupported. P02.9 Preview and playhead are implemented on PR #11 and remain under external review. P02.10 selection/IN/OUT interactions are not implemented or merged; P02.11 conversion/export is not implemented. Persistence, acquisition and Helper IPC are also not implemented.
 
 Repository: <https://github.com/nowyoullnever/tokkebi>
 
@@ -34,5 +34,6 @@ Repository: <https://github.com/nowyoullnever/tokkebi>
 - [UI components](docs/UI_COMPONENTS.md)
 - [Local audio decoder](docs/AUDIO_DECODER.md)
 - [Waveform foundation](docs/WAVEFORM.md)
+- [Preview playback](docs/PREVIEW_PLAYBACK.md)
 
 The product name is final for this repository. The application release remains `0.1.0`; P00 task numbers are implementation-stage labels, not release versions. `OPEN-FONT-04` remains unresolved.
