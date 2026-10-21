@@ -24,11 +24,16 @@ std::shared_ptr<const DecodedPcm> Pcm(uint32_t channels = 1, uint32_t rate = 4, 
   return pcm;
 }
 
-TransportSnapshot Render(PreviewEngine& engine, std::vector<std::vector<float>>& data, double rate = 4.)
+void RenderRaw(PreviewEngine& engine, std::vector<std::vector<float>>& data, double rate = 4.)
 {
   std::vector<float*> output;
   for (auto& channel : data) output.push_back(channel.data());
   engine.Render(output.data(), static_cast<int>(output.size()), static_cast<int>(data.empty() ? 0 : data[0].size()), rate);
+}
+
+TransportSnapshot Render(PreviewEngine& engine, std::vector<std::vector<float>>& data, double rate = 4.)
+{
+  RenderRaw(engine, data, rate);
   return engine.Snapshot();
 }
 
@@ -120,6 +125,70 @@ int main()
   Render(transport, mono);
   CHECK(transport.Snapshot().state == TransportState::Stopped && transport.Snapshot().position == 0);
 
+  // Frozen transport-state and same-block command-order matrix.
+  PreviewEngine controls;
+  CHECK(controls.Publish(Pcm(1, 4, {.1f, .2f, .3f, .4f})));
+  Render(controls, mono);
+  CHECK(controls.Play());
+  Zero(mono);
+  Render(controls, mono);
+  CHECK(std::fabs(mono[0][0] - .1f) < kTolerance && controls.Snapshot().state == TransportState::Playing);
+  CHECK(controls.ReturnToStart());
+  std::vector<std::vector<float>> empty(1);
+  snapshot = Render(controls, empty);
+  CHECK(snapshot.state == TransportState::Playing && snapshot.position == 0);
+  Zero(mono);
+  Render(controls, mono);
+  CHECK(std::fabs(mono[0][0] - .1f) < kTolerance);
+  CHECK(controls.Stop());
+  Render(controls, empty);
+  CHECK(controls.ReturnToStart());
+  snapshot = Render(controls, empty);
+  CHECK(snapshot.state == TransportState::Stopped && snapshot.position == 0);
+  CHECK(controls.Play());
+  Render(controls, mono);
+  CHECK(controls.Seek(2));
+  snapshot = Render(controls, empty);
+  CHECK(snapshot.state == TransportState::Playing && snapshot.position == 2);
+  Zero(mono);
+  Render(controls, mono);
+  CHECK(std::fabs(mono[0][0] - .3f) < kTolerance);
+  CHECK(controls.Pause());
+  Render(controls, empty);
+  CHECK(controls.Seek(2));
+  snapshot = Render(controls, empty);
+  CHECK(snapshot.state == TransportState::Paused && snapshot.position == 2);
+  CHECK(controls.Stop());
+  Render(controls, empty);
+  CHECK(controls.Seek(2));
+  snapshot = Render(controls, empty);
+  CHECK(snapshot.state == TransportState::Stopped && snapshot.position == 2);
+  CHECK(controls.Seek(2));
+  CHECK(controls.Stop());
+  snapshot = Render(controls, empty);
+  CHECK(snapshot.state == TransportState::Stopped && snapshot.position == 0);
+  CHECK(controls.Stop());
+  CHECK(controls.Play());
+  Zero(mono);
+  snapshot = Render(controls, mono);
+  CHECK(snapshot.state == TransportState::Playing && std::fabs(mono[0][0] - .1f) < kTolerance);
+  CHECK(controls.Pause());
+  CHECK(controls.Seek(2));
+  snapshot = Render(controls, empty);
+  CHECK(snapshot.state == TransportState::Paused && snapshot.position == 2);
+
+  PreviewEngine eofRestart;
+  CHECK(eofRestart.Publish(Pcm(1, 4, {.6f, -.4f})));
+  Render(eofRestart, mono);
+  CHECK(eofRestart.Play());
+  std::vector<std::vector<float>> eofBlock(1, std::vector<float>(3));
+  snapshot = Render(eofRestart, eofBlock);
+  CHECK(snapshot.state == TransportState::Stopped && snapshot.position == 2);
+  CHECK(eofRestart.Play());
+  Zero(mono);
+  snapshot = Render(eofRestart, mono);
+  CHECK(snapshot.state == TransportState::Playing && std::fabs(mono[0][0] - .6f) < kTolerance);
+
   auto b = Pcm(1, 4, {.25f, .25f, .25f, .25f});
   std::weak_ptr<const DecodedPcm> weakB = b;
   CHECK(transport.Publish(b));
@@ -192,6 +261,75 @@ int main()
   std::vector<std::vector<float>> passthrough {{.2f}, {-.3f}};
   Render(mix, passthrough);
   CHECK(passthrough[0][0] == .2f && passthrough[1][0] == -.3f);
+
+  // Every inactive preview state preserves known plugin host samples bit-exactly.
+  PreviewEngine plugin;
+  std::vector<std::vector<float>> host {{.2f}, {-.3f}};
+  Render(plugin, host);
+  CHECK(host[0][0] == .2f && host[1][0] == -.3f); // Unavailable
+  CHECK(plugin.Publish(Pcm(1, 4, {.5f, .5f, .5f, .5f})));
+  host = {{.2f}, {-.3f}};
+  Render(plugin, host);
+  CHECK(host[0][0] == .2f && host[1][0] == -.3f); // Stopped
+  CHECK(plugin.Play());
+  CHECK(plugin.Pause());
+  host = {{.2f}, {-.3f}};
+  Render(plugin, host);
+  CHECK(host[0][0] == .2f && host[1][0] == -.3f); // Paused
+  CHECK(plugin.Play());
+  CHECK(plugin.SetMuted(true));
+  host = {{.2f}, {-.3f}};
+  Render(plugin, host);
+  CHECK(host[0][0] == .2f && host[1][0] == -.3f); // Muted
+  CHECK(plugin.SetMuted(false));
+  CHECK(plugin.SetGain(0.f));
+  host = {{.2f}, {-.3f}};
+  Render(plugin, host);
+  CHECK(host[0][0] == .2f && host[1][0] == -.3f); // Gain zero
+
+  PreviewEngine protectedMix;
+  CHECK(protectedMix.Publish(Pcm(1, 4, {1.f, -1.f, 1.f, -1.f})));
+  Render(protectedMix, mono);
+  CHECK(protectedMix.Play());
+  host = {{1.f}, {1.f}};
+  Render(protectedMix, host);
+  CHECK(std::isfinite(host[0][0]) && std::isfinite(host[1][0]) && host[0][0] <= 1.f && host[1][0] <= 1.f);
+  host = {{-1.f}, {-1.f}};
+  Render(protectedMix, host);
+  CHECK(std::isfinite(host[0][0]) && std::isfinite(host[1][0]) && host[0][0] >= -1.f && host[1][0] >= -1.f);
+  PreviewEngine nonFinite;
+  CHECK(nonFinite.Publish(Pcm(1, 4, {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()})));
+  Render(nonFinite, mono);
+  CHECK(nonFinite.Play());
+  host = {{.25f}, {-.25f}};
+  Render(nonFinite, host);
+  CHECK(host[0][0] == .25f && host[1][0] == -.25f && std::isfinite(host[0][0]) && std::isfinite(host[1][0]));
+
+  PreviewEngine stereoRouting;
+  CHECK(stereoRouting.Publish(Pcm(2, 4, {.25f, -.5f, .75f, -.25f})));
+  Render(stereoRouting, mono);
+  CHECK(stereoRouting.Play());
+  std::vector<std::vector<float>> routed(2, std::vector<float>(1));
+  Render(stereoRouting, routed);
+  CHECK(std::fabs(routed[0][0] - .25f) < kTolerance && std::fabs(routed[1][0] + .5f) < kTolerance);
+
+  // Snapshot saturation only delays observation; playback continues and recovers after UI consumption.
+  PreviewEngine snapshots;
+  CHECK(snapshots.Publish(Pcm(1, 4, std::vector<float>(32, .25f))));
+  Render(snapshots, mono);
+  CHECK(snapshots.Play());
+  for (int index = 0; index < 12; ++index)
+  {
+    Zero(mono);
+    RenderRaw(snapshots, mono);
+    CHECK(std::fabs(mono[0][0] - .25f) < kTolerance);
+  }
+  const auto delayed = snapshots.Snapshot();
+  CHECK(delayed.sourceAvailable && delayed.state == TransportState::Playing && delayed.position > 0 && delayed.position < 12 && delayed.position <= delayed.frames);
+  Zero(mono);
+  RenderRaw(snapshots, mono);
+  const auto recovered = snapshots.Snapshot();
+  CHECK(recovered.sourceAvailable && recovered.state == TransportState::Playing && recovered.position > delayed.position && recovered.position <= recovered.frames);
 
   // Large, one-frame and irregular render blocks are equivalent for all frozen conversions.
   CheckResampleMatrix(44100, 44100.);
