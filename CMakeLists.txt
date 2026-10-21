@@ -60,6 +60,7 @@ iplug_add_plugin(tokkebi
     src/ui/AppShell.h
     src/ui/components/Components.h
     src/ui/layout/ShellLayout.h
+    src/ui/layout/LocalAudioEditorLayout.h
     src/ui/navigation/NavigationState.h
     src/ui/navigation/LocalAudioFocusRouter.h
     src/ui/LocalAudioDialogMailbox.h

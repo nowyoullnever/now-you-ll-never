@@ -100,25 +100,26 @@ void PreviewEngine::Apply(const Command& command) noexcept
 }
 void PreviewEngine::PublishSnapshot() noexcept
 {
-  auto& s=mSnapshot; s.sequence.fetch_add(1,std::memory_order_release);
-  s.generation.store(mActiveGeneration,std::memory_order_relaxed);s.state.store(static_cast<uint8_t>(mState),std::memory_order_relaxed);
-  s.position.store(mActiveSource?std::min<uint64_t>(static_cast<uint64_t>(mCursor),mActiveSource->frames):0,std::memory_order_relaxed);s.frames.store(mActiveSource?mActiveSource->frames:0,std::memory_order_relaxed);
-  s.gain.store(mTargetGain,std::memory_order_relaxed);s.muted.store(mMuted,std::memory_order_relaxed);s.available.store(mActiveSource!=nullptr,std::memory_order_relaxed);
-  s.sequence.fetch_add(1,std::memory_order_release);
+  const uint32_t write = mSnapshotWrite.load(std::memory_order_relaxed);
+  const uint32_t next = (write + 1U) % kSnapshotCapacity;
+  if (next == mSnapshotRead.load(std::memory_order_acquire)) return;
+
+  mSnapshots[write] = {mActiveGeneration, mState,
+    mActiveSource ? std::min<uint64_t>(static_cast<uint64_t>(mCursor), mActiveSource->frames) : 0,
+    mActiveSource ? mActiveSource->frames : 0, mTargetGain, mMuted, mActiveSource != nullptr};
+  mSnapshotWrite.store(next, std::memory_order_release);
 }
-TransportSnapshot PreviewEngine::Snapshot() const noexcept
+TransportSnapshot PreviewEngine::Snapshot() noexcept
 {
-  // A completed even sequence brackets a coherent snapshot. This deliberately
-  // never returns an unverified fallback after a bounded number of retries.
-  for (;;)
+  uint32_t read = mSnapshotRead.load(std::memory_order_relaxed);
+  const uint32_t write = mSnapshotWrite.load(std::memory_order_acquire);
+  while (read != write)
   {
-    const auto begin = mSnapshot.sequence.load(std::memory_order_acquire);
-    if (begin & 1U) continue;
-    TransportSnapshot snapshot;
-    snapshot.generation=mSnapshot.generation.load(std::memory_order_relaxed);snapshot.state=static_cast<TransportState>(mSnapshot.state.load(std::memory_order_relaxed));snapshot.position=mSnapshot.position.load(std::memory_order_relaxed);snapshot.frames=mSnapshot.frames.load(std::memory_order_relaxed);
-    snapshot.gain=mSnapshot.gain.load(std::memory_order_relaxed);snapshot.muted=mSnapshot.muted.load(std::memory_order_relaxed);snapshot.sourceAvailable=mSnapshot.available.load(std::memory_order_relaxed);
-    if (begin == mSnapshot.sequence.load(std::memory_order_acquire)) return snapshot;
+    mLatestSnapshot = mSnapshots[read];
+    read = (read + 1U) % kSnapshotCapacity;
   }
+  mSnapshotRead.store(read, std::memory_order_release);
+  return mLatestSnapshot;
 }
 template <typename T> void RenderImpl(PreviewEngine& engine,T** outputs,int outputChannels,int frames,double outputRate) noexcept
 {

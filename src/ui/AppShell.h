@@ -3,6 +3,7 @@
 #include "IControls.h"
 
 #include "layout/ShellLayout.h"
+#include "layout/LocalAudioEditorLayout.h"
 #include "navigation/NavigationState.h"
 #include "navigation/LocalAudioFocusRouter.h"
 #include "components/VisualControls.h"
@@ -42,7 +43,9 @@ private:
   void ShowDemoNotification();
   void PromptForLocalAudio();
   Rect LocalAudioButtonBounds(const ShellLayout& layout) const;
+  Rect LocalAudioMetadataBounds(const ShellLayout& layout) const;
   Rect WaveformBounds(const ShellLayout& layout) const;
+  Rect WaveformHelpBounds(const ShellLayout& layout) const;
   Rect PreviewControlBounds(const ShellLayout& layout, int index) const;
   Rect PreviewVolumeBounds(const ShellLayout& layout) const;
   void Redraw();

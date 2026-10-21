@@ -17,7 +17,7 @@ Parked:
 
 - PR #9 — early Development Task 10 selection foundation. It is Draft and must not merge before Task 09 is completed and externally reviewed.
 
-AIFF/AIFC and FLAC are recognized but unsupported. Preview, playhead, remaining selection/IN/OUT interactions, conversion/export, persistence, acquisition and Helper IPC are not implemented.
+AIFF/AIFC and FLAC are recognized but unsupported. P02.9 Preview and playhead are implemented on PR #11 and remain under external review. P02.10 selection/IN/OUT interactions are not implemented or merged; P02.11 conversion/export is not implemented. Persistence, acquisition and Helper IPC are also not implemented.
 
 Repository: <https://github.com/nowyoullnever/tokkebi>
 

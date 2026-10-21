@@ -1,4 +1,5 @@
 #include "ui/layout/ShellLayout.h"
+#include "ui/layout/LocalAudioEditorLayout.h"
 #include "ui/navigation/LocalAudioFocusRouter.h"
 #include "ui/navigation/NavigationState.h"
 #include "ui/text/Strings.h"
@@ -46,6 +47,29 @@ void CheckLayout(float width, float height)
   Check(!Overlap(layout.tabRail, layout.content), "tab rail and content do not overlap");
   Check(!Overlap(layout.content, layout.statusBar), "content and status bar do not overlap");
   Check(layout.statusBar.y + layout.statusBar.height == layout.bounds.height, "status bar reaches bottom edge");
+}
+
+void CheckLocalAudioEditorLayout(float width, float height)
+{
+  const auto shell = CalculateShellLayout(width, height);
+  const auto editor = CalculateLocalAudioEditorLayout(shell.contentPadding);
+  Check(Bounded(editor.openButton, shell.contentPadding), "local-audio open button stays in content");
+  Check(Bounded(editor.metadata, shell.contentPadding), "local-audio metadata stays in content");
+  Check(Bounded(editor.volume, shell.contentPadding), "preview volume stays in content");
+  Check(Bounded(editor.elapsed, shell.contentPadding), "preview elapsed stays in content");
+  Check(Bounded(editor.waveform, shell.contentPadding), "waveform stays in content");
+  Check(Bounded(editor.help, shell.contentPadding), "waveform help stays in content");
+  for (const auto transport : editor.transport)
+  {
+    Check(Bounded(transport, shell.contentPadding), "transport control stays in content");
+    Check(!Overlap(transport, editor.metadata), "transport does not overlap metadata");
+    Check(!Overlap(transport, editor.waveform), "transport does not overlap waveform");
+  }
+  Check(!Overlap(editor.openButton, editor.metadata), "open button does not overlap metadata");
+  Check(!Overlap(editor.metadata, editor.waveform), "metadata does not overlap waveform");
+  Check(!Overlap(editor.volume, editor.waveform), "preview volume does not overlap waveform");
+  Check(!Overlap(editor.elapsed, editor.waveform), "preview elapsed does not overlap waveform");
+  Check(!Overlap(editor.waveform, editor.help), "waveform does not overlap help");
 }
 
 void CheckShellContrast(tokkebi::theme::ThemeMode mode)
@@ -159,6 +183,9 @@ int main()
   CheckLayout(1160.f, 760.f);
   CheckLayout(1440.f, 900.f);
   CheckLayout(320.f, 220.f);
+  CheckLocalAudioEditorLayout(760.f, 540.f);
+  CheckLocalAudioEditorLayout(1024.f, 680.f);
+  CheckLocalAudioEditorLayout(1160.f, 760.f);
   Check(CalculateShellLayout(1160.f, 760.f).widthClass == WidthClass::Wide, "wide layout breakpoint");
   Check(CalculateShellLayout(1024.f, 680.f).widthClass == WidthClass::Intermediate, "intermediate layout breakpoint");
   Check(CalculateShellLayout(320.f, 220.f).widthClass == WidthClass::Compact && CalculateShellLayout(320.f, 220.f).compactTabs,

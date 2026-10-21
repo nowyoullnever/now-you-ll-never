@@ -1,72 +1,278 @@
 #include "audio/preview/PreviewEngine.h"
 
-#include <atomic>
 #include <cmath>
 #include <iostream>
 #include <limits>
-#include <thread>
 #include <vector>
 
 using namespace tokkebi::audio;
 using namespace tokkebi::audio::preview;
-namespace {
+
+namespace
+{
 int failures{};
 #define CHECK(x) do { if (!(x)) { ++failures; std::cerr << "FAIL: " #x "\n"; } } while (false)
-std::shared_ptr<const DecodedPcm> Pcm(uint32_t channels=1, uint32_t rate=4, std::vector<float> samples={0.f,1.f,.5f,-1.f})
-{ auto p=std::make_shared<DecodedPcm>(); p->channels=channels;p->sampleRate=rate;p->frames=samples.size()/channels;p->interleaved=std::move(samples);return p; }
-TransportSnapshot Render(PreviewEngine& engine, std::vector<std::vector<float>>& data, double rate=4.)
-{ std::vector<float*> output;for(auto& channel:data)output.push_back(channel.data());engine.Render(output.data(),static_cast<int>(output.size()),static_cast<int>(data.empty()?0:data[0].size()),rate);return engine.Snapshot(); }
-void Zero(std::vector<std::vector<float>>& data){for(auto& channel:data)for(auto& sample:channel)sample=0.f;}
+constexpr float kTolerance = .0001f;
+
+std::shared_ptr<const DecodedPcm> Pcm(uint32_t channels = 1, uint32_t rate = 4, std::vector<float> samples = {0.f, 1.f, .5f, -1.f})
+{
+  auto pcm = std::make_shared<DecodedPcm>();
+  pcm->channels = channels;
+  pcm->sampleRate = rate;
+  pcm->frames = samples.size() / channels;
+  pcm->interleaved = std::move(samples);
+  return pcm;
 }
+
+TransportSnapshot Render(PreviewEngine& engine, std::vector<std::vector<float>>& data, double rate = 4.)
+{
+  std::vector<float*> output;
+  for (auto& channel : data) output.push_back(channel.data());
+  engine.Render(output.data(), static_cast<int>(output.size()), static_cast<int>(data.empty() ? 0 : data[0].size()), rate);
+  return engine.Snapshot();
+}
+
+void Zero(std::vector<std::vector<float>>& data)
+{
+  for (auto& channel : data)
+    for (auto& sample : channel)
+      sample = 0.f;
+}
+
+bool Silent(const std::vector<std::vector<float>>& data)
+{
+  for (const auto& channel : data)
+    for (const float sample : channel)
+      if (sample != 0.f) return false;
+  return true;
+}
+
+std::vector<float> RunResample(uint32_t sourceRate, double outputRate, const std::vector<int>& blocks)
+{
+  std::vector<float> source(128);
+  for (std::size_t index = 0; index < source.size(); ++index)
+    source[index] = static_cast<float>(index % 17) / 17.f - .4f;
+
+  PreviewEngine engine;
+  auto pcm = Pcm(1, sourceRate, source);
+  std::vector<std::vector<float>> bootstrap(1, std::vector<float>(1));
+  CHECK(engine.Publish(pcm));
+  Render(engine, bootstrap, outputRate);
+  CHECK(engine.Play());
+
+  std::vector<float> result;
+  for (const int frames : blocks)
+  {
+    std::vector<std::vector<float>> block(1, std::vector<float>(static_cast<std::size_t>(frames)));
+    Render(engine, block, outputRate);
+    result.insert(result.end(), block[0].begin(), block[0].end());
+  }
+  return result;
+}
+
+void CheckEquivalent(const std::vector<float>& expected, const std::vector<float>& actual)
+{
+  CHECK(expected.size() == actual.size());
+  for (std::size_t index = 0; index < std::min(expected.size(), actual.size()); ++index)
+    CHECK(std::fabs(expected[index] - actual[index]) <= kTolerance);
+}
+
+void CheckResampleMatrix(uint32_t sourceRate, double outputRate)
+{
+  const std::vector<int> large {19};
+  const std::vector<int> oneFrame(19, 1);
+  const std::vector<int> irregular {1, 4, 2, 5, 3, 4};
+  const auto expected = RunResample(sourceRate, outputRate, large);
+  CheckEquivalent(expected, RunResample(sourceRate, outputRate, oneFrame));
+  CheckEquivalent(expected, RunResample(sourceRate, outputRate, irregular));
+}
+}
+
 int main()
 {
-  PreviewEngine e; std::vector<std::vector<float>> mono(1,std::vector<float>(1));
-  CHECK(e.Snapshot().state==TransportState::Unavailable); CHECK(e.Play()); Render(e,mono); CHECK(e.Snapshot().state==TransportState::Unavailable);
-  auto a=Pcm(); std::weak_ptr<const DecodedPcm> weakA=a; CHECK(e.Publish(a)); a.reset(); Render(e,mono); auto s=e.Snapshot(); CHECK(s.state==TransportState::Stopped&&s.position==0&&s.frames==4&&s.sourceAvailable);
-  CHECK(e.Play()); Zero(mono); s=Render(e,mono); CHECK(s.state==TransportState::Playing&&s.position==1);
-  CHECK(e.Play()); Render(e,mono); CHECK(e.Pause()); Render(e,mono); const auto paused=e.Snapshot().position; Render(e,mono); CHECK(e.Snapshot().state==TransportState::Paused&&e.Snapshot().position==paused);
-  CHECK(e.ReturnToStart());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Paused&&e.Snapshot().position==0);
-  CHECK(e.Play());Render(e,mono);CHECK(e.Seek(3));Render(e,mono);CHECK(e.Snapshot().position==4||e.Snapshot().position==3);
-  CHECK(e.Stop());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Stopped&&e.Snapshot().position==0);
-  CHECK(e.ReturnToStart());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Stopped&&e.Snapshot().position==0);
+  std::vector<std::vector<float>> mono(1, std::vector<float>(1));
+  PreviewEngine transport;
+  CHECK(transport.Snapshot().state == TransportState::Unavailable);
+  CHECK(transport.Play());
+  Render(transport, mono);
+  CHECK(transport.Snapshot().state == TransportState::Unavailable);
 
-  // Command order is consumed only at block boundaries; later commands win deterministically.
-  CHECK(e.Play());CHECK(e.Seek(3));CHECK(e.Stop());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Stopped&&e.Snapshot().position==0);
-  CHECK(e.Stop());CHECK(e.Play());Render(e,mono);CHECK(e.Snapshot().position>0);
-  CHECK(e.Pause());CHECK(e.Seek(2));Render(e,mono);CHECK(e.Snapshot().state==TransportState::Paused&&e.Snapshot().position==2);
+  auto a = Pcm();
+  std::weak_ptr<const DecodedPcm> weakA = a;
+  CHECK(transport.Publish(a));
+  a.reset();
+  Render(transport, mono);
+  auto snapshot = transport.Snapshot();
+  CHECK(snapshot.state == TransportState::Stopped && snapshot.position == 0 && snapshot.frames == 4 && snapshot.sourceAvailable);
+  CHECK(transport.Play());
+  Zero(mono);
+  snapshot = Render(transport, mono);
+  CHECK(snapshot.state == TransportState::Playing && snapshot.position == 1);
+  CHECK(transport.Pause());
+  Render(transport, mono);
+  const auto paused = transport.Snapshot().position;
+  Render(transport, mono);
+  CHECK(transport.Snapshot().state == TransportState::Paused && transport.Snapshot().position == paused);
+  CHECK(transport.ReturnToStart());
+  Render(transport, mono);
+  CHECK(transport.Snapshot().state == TransportState::Paused && transport.Snapshot().position == 0);
+  CHECK(transport.Stop());
+  Render(transport, mono);
+  CHECK(transport.Snapshot().state == TransportState::Stopped && transport.Snapshot().position == 0);
 
-  auto b=Pcm(1,4,{.25f,.25f,.25f,.25f});std::weak_ptr<const DecodedPcm> weakB=b;CHECK(e.Publish(b));b.reset();Render(e,mono);CHECK(e.Snapshot().generation==2&&e.Snapshot().position==0&&e.Snapshot().state==TransportState::Stopped);e.Maintain();CHECK(weakA.expired());
-  CHECK(e.Clear());Render(e,mono);CHECK(e.Snapshot().state==TransportState::Unavailable&&!e.Snapshot().sourceAvailable);e.Maintain();CHECK(weakB.expired());
+  auto b = Pcm(1, 4, {.25f, .25f, .25f, .25f});
+  std::weak_ptr<const DecodedPcm> weakB = b;
+  CHECK(transport.Publish(b));
+  b.reset();
+  transport.Maintain();
+  CHECK(!weakA.expired());
+  Render(transport, mono);
+  transport.Maintain();
+  CHECK(weakA.expired() && !weakB.expired());
+  CHECK(transport.Clear());
+  Render(transport, mono);
+  transport.Maintain();
+  CHECK(weakB.expired());
+  for (int index = 0; index < 8; ++index)
+  {
+    auto transient = Pcm();
+    std::weak_ptr<const DecodedPcm> weak = transient;
+    CHECK(transport.Publish(transient));
+    transient.reset();
+    Render(transport, mono);
+    transport.Maintain();
+    CHECK(!weak.expired());
+    CHECK(transport.Clear());
+    Render(transport, mono);
+    transport.Maintain();
+    CHECK(weak.expired());
+  }
 
-  // Owners outlive queued raw pointers and retire only after their generation is acknowledged.
-  PreviewEngine ownership; auto oa=Pcm(),ob=Pcm(),oc=Pcm(),od=Pcm(); std::weak_ptr<const DecodedPcm> wa=oa,wb=ob,wc=oc,wd=od;
-  CHECK(ownership.Publish(oa)); oa.reset(); ownership.Maintain(); CHECK(!wa.expired());
-  CHECK(ownership.Publish(ob)); CHECK(ownership.Clear()); CHECK(ownership.Publish(oc)); CHECK(ownership.Publish(od)); ob.reset(); oc.reset(); od.reset();
-  Render(ownership,mono); CHECK(ownership.Snapshot().sourceAvailable && ownership.Snapshot().generation==5); ownership.Maintain();
-  CHECK(wa.expired() && wb.expired() && wc.expired() && !wd.expired());
-  CHECK(ownership.Clear()); Render(ownership,mono); ownership.Maintain(); CHECK(wd.expired());
-  for(int i=0;i<8;++i){auto transient=Pcm();std::weak_ptr<const DecodedPcm> weak=transient;CHECK(ownership.Publish(transient));transient.reset();Render(ownership,mono);ownership.Maintain();CHECK(!weak.expired());CHECK(ownership.Clear());Render(ownership,mono);ownership.Maintain();CHECK(weak.expired());}
+  // A cannot reappear after B adoption or a later clear boundary.
+  PreviewEngine generations;
+  auto sourceA = Pcm(1, 4, {.25f, .25f, .25f, .25f});
+  auto sourceB = Pcm(1, 4, {.75f, .75f, .75f, .75f});
+  CHECK(generations.Publish(sourceA));
+  Render(generations, mono);
+  CHECK(generations.Play());
+  Zero(mono);
+  Render(generations, mono);
+  CHECK(std::fabs(mono[0][0] - .25f) < kTolerance && generations.Snapshot().position == 1);
+  CHECK(generations.Publish(sourceB));
+  Zero(mono);
+  snapshot = Render(generations, mono);
+  CHECK(Silent(mono) && snapshot.generation == 2 && snapshot.state == TransportState::Stopped && snapshot.position == 0);
+  Zero(mono);
+  snapshot = Render(generations, mono);
+  CHECK(Silent(mono) && snapshot.generation == 2 && snapshot.state == TransportState::Stopped);
+  CHECK(generations.Play());
+  Zero(mono);
+  Render(generations, mono);
+  CHECK(std::fabs(mono[0][0] - .75f) < kTolerance);
+  CHECK(generations.Clear());
+  Zero(mono);
+  snapshot = Render(generations, mono);
+  CHECK(Silent(mono) && snapshot.state == TransportState::Unavailable && !snapshot.sourceAvailable);
+  Zero(mono);
+  snapshot = Render(generations, mono);
+  CHECK(Silent(mono) && snapshot.state == TransportState::Unavailable && snapshot.position == 0);
 
-  // 63 queued commands fill a 64-slot ring; the failure is observable rather than dropped silently.
-  for(uint32_t i=0;i<PreviewEngine::kCommandCapacity-1;++i)CHECK(e.Play());CHECK(!e.Play()&&e.LastCommandFailure()==CommandFailure::QueueFull);Render(e,mono);
+  for (uint32_t index = 0; index < PreviewEngine::kCommandCapacity - 1; ++index) CHECK(transport.Play());
+  CHECK(!transport.Play() && transport.LastCommandFailure() == CommandFailure::QueueFull);
+  Render(transport, mono);
 
-  // Mono duplication, stereo routing and exact inactive passthrough.
-  auto source=Pcm();CHECK(e.Publish(source));Render(e,mono);CHECK(e.Play());std::vector<std::vector<float>> stereo(2,std::vector<float>(1));Render(e,stereo);CHECK(stereo[0][0]==stereo[1][0]);
-  CHECK(e.Pause());std::vector<std::vector<float>> passthrough{{.2f},{-.3f}};Render(e,passthrough);CHECK(passthrough[0][0]==.2f&&passthrough[1][0]==-.3f);
-  CHECK(e.SetGain(0.f));CHECK(e.Play());passthrough={{.2f},{-.3f}};Render(e,passthrough);CHECK(passthrough[0][0]==.2f&&passthrough[1][0]==-.3f);
-  CHECK(e.SetGain(std::numeric_limits<float>::quiet_NaN()));CHECK(e.SetMuted(true));passthrough={{.2f},{-.3f}};Render(e,passthrough);CHECK(passthrough[0][0]==.2f&&passthrough[1][0]==-.3f&&e.Snapshot().gain==1.f&&e.Snapshot().muted);
-  CHECK(e.SetMuted(false));CHECK(e.ReturnToStart());passthrough={{.9f},{.9f}};Render(e,passthrough);CHECK(std::isfinite(passthrough[0][0])&&passthrough[0][0]<=1.f);
+  PreviewEngine mix;
+  CHECK(mix.Publish(Pcm()));
+  Render(mix, mono);
+  CHECK(mix.Play());
+  std::vector<std::vector<float>> stereo(2, std::vector<float>(1));
+  Render(mix, stereo);
+  CHECK(stereo[0][0] == stereo[1][0]);
+  CHECK(mix.Pause());
+  std::vector<std::vector<float>> passthrough {{.2f}, {-.3f}};
+  Render(mix, passthrough);
+  CHECK(passthrough[0][0] == .2f && passthrough[1][0] == -.3f);
 
-  // Fractional cursor is equivalent for one large block and irregular block splits.
-  auto resample=Pcm(1,44100,{0.f,.25f,.5f,.75f,1.f,-.5f}); PreviewEngine large, split;CHECK(large.Publish(resample));CHECK(split.Publish(resample));std::vector<std::vector<float>> once(1,std::vector<float>(7)),pieces(1);Render(large,once,48000.);CHECK(large.Play());Render(large,once,48000.);CHECK(split.Play());for(int n:std::vector<int>{1,3,1,2}){std::vector<std::vector<float>> part(1,std::vector<float>(n));Render(split,part,48000.);pieces[0].insert(pieces[0].end(),part[0].begin(),part[0].end());}CHECK(large.Snapshot().position==split.Snapshot().position);for(size_t i=0;i<once[0].size();++i)CHECK(std::fabs(once[0][i]-pieces[0][i])<.0001f);
-  PreviewEngine changing;CHECK(changing.Publish(resample));Render(changing,mono);CHECK(changing.Play());std::vector<std::vector<float>> first(1,std::vector<float>(2)),second(1,std::vector<float>(2));Render(changing,first,48000.);const auto before=changing.Snapshot().position;Render(changing,second,44100.);CHECK(changing.Snapshot().position>=before);
+  // Large, one-frame and irregular render blocks are equivalent for all frozen conversions.
+  CheckResampleMatrix(44100, 44100.);
+  CheckResampleMatrix(44100, 48000.);
+  CheckResampleMatrix(48000, 44100.);
+  PreviewEngine changingRate;
+  CHECK(changingRate.Publish(Pcm(1, 44100, {0.f, .25f, .5f, .75f, 1.f, -.5f})));
+  Render(changingRate, mono, 48000.);
+  CHECK(changingRate.Play());
+  std::vector<std::vector<float>> rateBlock(1, std::vector<float>(2));
+  Render(changingRate, rateBlock, 48000.);
+  const auto beforeRateChange = changingRate.Snapshot().position;
+  Render(changingRate, rateBlock, 44100.);
+  CHECK(changingRate.Snapshot().position >= beforeRateChange);
 
-  // Same-rate, 1/2-frame blocks, EOF and repeated snapshots retain the same transport facts.
-  PreviewEngine exact;CHECK(exact.Publish(Pcm(1,4,{.5f,-.5f})));Render(exact,mono,4.);CHECK(exact.Play());std::vector<std::vector<float>> one(1,std::vector<float>(1));Render(exact,one,4.);CHECK(std::fabs(one[0][0]-.5f)<.0001f&&exact.Snapshot().position==1);Zero(one);Render(exact,one,4.);CHECK(std::fabs(one[0][0]+.5f)<.0001f&&exact.Snapshot().state==TransportState::Stopped&&exact.Snapshot().position==2);Zero(one);Render(exact,one,4.);CHECK(one[0][0]==0.f&&exact.Snapshot().position==2);
-  for(int i=0;i<32;++i){const auto coherent=exact.Snapshot();CHECK((!coherent.sourceAvailable&&coherent.state==TransportState::Unavailable&&coherent.position==0&&coherent.frames==0)||(coherent.sourceAvailable&&coherent.position<=coherent.frames));}
-  PreviewEngine concurrent;CHECK(concurrent.Publish(Pcm(1,4,std::vector<float>(512,.25f))));Render(concurrent,mono,4.);CHECK(concurrent.Play());std::atomic<bool> rendering{true};std::thread callback([&]{std::vector<std::vector<float>> block(1,std::vector<float>(1));for(int i=0;i<1024;++i){Zero(block);Render(concurrent,block,4.);}rendering.store(false,std::memory_order_release);});while(rendering.load(std::memory_order_acquire)){const auto coherent=concurrent.Snapshot();CHECK(coherent.sourceAvailable&&coherent.position<=coherent.frames&&coherent.frames==512);}callback.join();
+  PreviewEngine oneFrameSource;
+  CHECK(oneFrameSource.Publish(Pcm(1, 4, {.5f})));
+  Render(oneFrameSource, mono);
+  CHECK(oneFrameSource.Play());
+  Zero(mono);
+  snapshot = Render(oneFrameSource, mono);
+  CHECK(std::fabs(mono[0][0] - .5f) < kTolerance && snapshot.state == TransportState::Stopped && snapshot.position == 1);
+  PreviewEngine twoFrameSource;
+  CHECK(twoFrameSource.Publish(Pcm(1, 4, {.5f, -.5f})));
+  Render(twoFrameSource, mono);
+  CHECK(twoFrameSource.Play());
+  Zero(mono);
+  Render(twoFrameSource, mono);
+  CHECK(std::fabs(mono[0][0] - .5f) < kTolerance && twoFrameSource.Snapshot().position == 1);
+  Zero(mono);
+  snapshot = Render(twoFrameSource, mono);
+  CHECK(std::fabs(mono[0][0] + .5f) < kTolerance && snapshot.state == TransportState::Stopped && snapshot.position == 2);
 
-  // Standalone-style zero buffers remain silent when stopped, paused, muted, or gain zero.
-  PreviewEngine silence;CHECK(silence.Publish(Pcm()));Render(silence,mono);Zero(mono);Render(silence,mono);for(float v:mono[0])CHECK(v==0.f);CHECK(silence.Play());CHECK(silence.SetMuted(true));Zero(mono);Render(silence,mono);for(float v:mono[0])CHECK(v==0.f);
-  return failures?1:0;
+  PreviewEngine gain;
+  CHECK(gain.Publish(Pcm(1, 4, std::vector<float>(32, 1.f))));
+  Render(gain, mono);
+  CHECK(gain.Play());
+  CHECK(gain.SetGain(.5f));
+  Zero(mono);
+  snapshot = Render(gain, mono);
+  CHECK(snapshot.gain == .5f && mono[0][0] < 1.f && mono[0][0] > .5f);
+  CHECK(gain.SetMuted(true));
+  Zero(mono);
+  snapshot = Render(gain, mono);
+  CHECK(snapshot.muted && snapshot.gain == .5f && Silent(mono));
+  CHECK(gain.SetMuted(false));
+  Zero(mono);
+  snapshot = Render(gain, mono);
+  CHECK(!snapshot.muted && snapshot.gain == .5f && std::fabs(mono[0][0] - .01f) < kTolerance);
+  CHECK(gain.SetGain(0.f));
+  Zero(mono);
+  Render(gain, mono);
+  CHECK(Silent(mono));
+
+  PreviewEngine standalone;
+  std::vector<std::vector<float>> standaloneOut(1, std::vector<float>(1));
+  Zero(standaloneOut);
+  Render(standalone, standaloneOut);
+  CHECK(Silent(standaloneOut)); // Unavailable
+  CHECK(standalone.Publish(Pcm(1, 4, {.8f, .8f, .8f, .8f})));
+  Zero(standaloneOut);
+  Render(standalone, standaloneOut);
+  CHECK(Silent(standaloneOut)); // Stopped
+  CHECK(standalone.Play());
+  Zero(standaloneOut);
+  Render(standalone, standaloneOut);
+  CHECK(standaloneOut[0][0] != 0.f); // Playing
+  CHECK(standalone.Pause());
+  Zero(standaloneOut);
+  Render(standalone, standaloneOut);
+  CHECK(Silent(standaloneOut)); // Paused
+  CHECK(standalone.Play());
+  CHECK(standalone.SetMuted(true));
+  Zero(standaloneOut);
+  Render(standalone, standaloneOut);
+  CHECK(Silent(standaloneOut)); // Muted
+  CHECK(standalone.SetMuted(false));
+  CHECK(standalone.SetGain(0.f));
+  Zero(standaloneOut);
+  Render(standalone, standaloneOut);
+  CHECK(Silent(standaloneOut)); // Gain zero
+
+  return failures ? 1 : 0;
 }

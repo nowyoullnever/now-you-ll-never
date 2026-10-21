@@ -42,7 +42,8 @@ public:
   // ProcessBlock never owns or destroys a shared_ptr.
   void Maintain() noexcept;
   CommandFailure LastCommandFailure() const noexcept { return mLastFailure.load(std::memory_order_acquire); }
-  TransportSnapshot Snapshot() const noexcept;
+  // UI/control thread only. Drains a bounded SPSC audio-to-UI snapshot queue.
+  TransportSnapshot Snapshot() noexcept;
 
   // Adds preview to existing outputs. The supplied rate is sampled by the
   // audio thread at a block boundary, so rate changes preserve source cursor.
@@ -54,13 +55,7 @@ private:
   enum class CommandType : uint8_t { InstallSource, ClearSource, Play, Pause, Stop, ReturnToStart, Seek, SetGain, SetMute };
   struct Command { CommandType type{}; const DecodedPcm* source{}; uint64_t generation{}; uint64_t frame{}; float gain{}; bool muted{}; };
   struct SourceOwner { uint64_t generation{}; std::shared_ptr<const DecodedPcm> source; };
-  struct SnapshotStorage {
-    std::atomic<uint64_t> sequence{0};
-    std::atomic<uint64_t> generation{0}, position{0}, frames{0};
-    std::atomic<uint8_t> state{static_cast<uint8_t>(TransportState::Unavailable)};
-    std::atomic<float> gain{1.f};
-    std::atomic<bool> muted{false}, available{false};
-  };
+  static constexpr uint32_t kSnapshotCapacity = 8;
 
   bool Push(Command command) noexcept;
   bool Pop(Command& command) noexcept;
@@ -85,6 +80,14 @@ private:
   float mTargetGain = 1.f;
   float mRenderGain = 1.f;
   bool mMuted = false;
-  SnapshotStorage mSnapshot;
+
+  // Reverse SPSC queue: audio publishes a complete value before advancing
+  // mSnapshotWrite (release); UI reads only published values after acquire.
+  // One unused slot distinguishes full from empty, so publication is bounded
+  // and a full queue simply drops the newest observation.
+  std::array<TransportSnapshot, kSnapshotCapacity> mSnapshots{};
+  std::atomic<uint32_t> mSnapshotWrite{0};
+  std::atomic<uint32_t> mSnapshotRead{0};
+  TransportSnapshot mLatestSnapshot{}; // UI/control thread only
 };
 }
